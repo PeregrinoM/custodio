@@ -2,6 +2,7 @@ import { Paragraph } from "@/types/database";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Clock } from "lucide-react";
+import * as Diff from "diff";
 
 interface DiffViewerProps {
   paragraph: Paragraph | null;
@@ -12,8 +13,30 @@ interface DiffViewerProps {
 const DiffViewer = ({ paragraph, open, onOpenChange }: DiffViewerProps) => {
   if (!paragraph) return null;
 
-  const renderDiffText = (text: string, isOld: boolean) => {
-    return <p className="text-sm leading-relaxed">{text}</p>;
+  const renderDiffText = (oldText: string, newText: string) => {
+    const diff = Diff.diffWords(oldText, newText);
+    
+    return (
+      <div className="text-sm leading-relaxed">
+        {diff.map((part, index) => {
+          if (part.added) {
+            return (
+              <span key={index} className="bg-change-bg-added text-change-added font-medium">
+                {part.value}
+              </span>
+            );
+          }
+          if (part.removed) {
+            return (
+              <span key={index} className="bg-change-bg-removed text-change-removed line-through font-medium">
+                {part.value}
+              </span>
+            );
+          }
+          return <span key={index}>{part.value}</span>;
+        })}
+      </div>
+    );
   };
 
   return (
@@ -42,20 +65,11 @@ const DiffViewer = ({ paragraph, open, onOpenChange }: DiffViewerProps) => {
               
               <div className="space-y-3">
                 <div className="space-y-2">
-                  <Badge variant="outline" className="bg-change-bg-removed text-change-removed border-change-removed/30">
-                    Texto original
+                  <Badge variant="secondary">
+                    Comparación con resaltado
                   </Badge>
-                  <div className="p-3 rounded-lg bg-change-bg-removed">
-                    <p className="text-sm leading-relaxed">{change.old_text}</p>
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Badge variant="outline" className="bg-change-bg-added text-change-added border-change-added/30">
-                    Texto actualizado
-                  </Badge>
-                  <div className="p-3 rounded-lg bg-change-bg-added">
-                    <p className="text-sm leading-relaxed">{change.new_text}</p>
+                  <div className="p-4 rounded-lg bg-secondary/50 border border-border">
+                    {renderDiffText(change.old_text, change.new_text)}
                   </div>
                 </div>
               </div>
