@@ -12,12 +12,8 @@ interface DiffViewerProps {
 const DiffViewer = ({ paragraph, open, onOpenChange }: DiffViewerProps) => {
   if (!paragraph) return null;
 
-  // Simple diff highlighting - in production, use a proper diff library
-  const highlightDiff = (oldText: string, newText: string) => {
-    const oldWords = oldText.split(' ');
-    const newWords = newText.split(' ');
-    
-    return { oldWords, newWords };
+  const renderDiffText = (text: string, isOld: boolean) => {
+    return <p className="text-sm leading-relaxed">{text}</p>;
   };
 
   return (
