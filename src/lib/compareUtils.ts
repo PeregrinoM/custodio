@@ -102,7 +102,24 @@ export async function compareBookVersion(
           p => p.paragraph_number === newParagraph.number
         );
 
-        if (!existingParagraph) continue;
+        // Handle newly added paragraphs
+        if (!existingParagraph) {
+          const { error: insertError } = await supabase
+            .from('paragraphs')
+            .insert({
+              chapter_id: existingChapter.id,
+              paragraph_number: newParagraph.number,
+              base_text: newParagraph.text,
+              latest_text: newParagraph.text,
+              has_changed: false,
+              change_history: [],
+            });
+
+          if (insertError) {
+            console.error('Error inserting new paragraph:', insertError);
+          }
+          continue;
+        }
 
         const comparison = compareParagraphs(
           existingParagraph.latest_text,
@@ -141,12 +158,19 @@ export async function compareBookVersion(
         }
       }
 
-      // Update chapter change count
+      // Update chapter change count (accumulate, don't replace)
       if (changesInChapter > 0) {
+        // Fetch current chapter data to get existing count
+        const { data: currentChapter } = await supabase
+          .from('chapters')
+          .select('change_count')
+          .eq('id', existingChapter.id)
+          .single();
+
         const { error: chapterUpdateError } = await supabase
           .from('chapters')
           .update({
-            change_count: changesInChapter,
+            change_count: (currentChapter?.change_count || 0) + changesInChapter,
             updated_at: new Date().toISOString(),
           })
           .eq('id', existingChapter.id);
@@ -163,11 +187,18 @@ export async function compareBookVersion(
       }
     }
 
-    // Update book total changes and last check date
+    // Update book total changes and last check date (accumulate, don't replace)
+    // Fetch current book data to get existing count
+    const { data: currentBook } = await supabase
+      .from('books')
+      .select('total_changes')
+      .eq('id', bookId)
+      .single();
+
     const { error: bookUpdateError } = await supabase
       .from('books')
       .update({
-        total_changes: result.totalChanges,
+        total_changes: (currentBook?.total_changes || 0) + result.totalChanges,
         last_check_date: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })

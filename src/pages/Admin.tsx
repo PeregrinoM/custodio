@@ -4,12 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchBook } from "@/lib/egwApi";
 import { compareBookVersion, importBook } from "@/lib/compareUtils";
 import { Book } from "@/types/database";
+import { useAdminCheck } from "@/hooks/useAdminCheck";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, BookPlus, RefreshCw, LogOut } from "lucide-react";
+import { Loader2, BookPlus, RefreshCw, LogOut, AlertTriangle } from "lucide-react";
 
 const Admin = () => {
   const [user, setUser] = useState<any>(null);
@@ -18,6 +19,7 @@ const Admin = () => {
   const [comparing, setComparing] = useState<string | null>(null);
   const [newBookCode, setNewBookCode] = useState("");
   const [importing, setImporting] = useState(false);
+  const { isAdmin, loading: adminCheckLoading } = useAdminCheck();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -86,10 +88,33 @@ const Admin = () => {
   };
 
   const handleImportBook = async () => {
-    if (!newBookCode.trim()) {
+    const trimmedCode = newBookCode.trim();
+    
+    // Validation
+    if (!trimmedCode) {
       toast({
         title: "Error",
         description: "Por favor ingresa un código de libro",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate only uppercase letters
+    if (!/^[A-Z]+$/.test(trimmedCode)) {
+      toast({
+        title: "Error",
+        description: "El código debe contener solo letras mayúsculas",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check for duplicate
+    if (books.some(b => b.code === trimmedCode)) {
+      toast({
+        title: "Error",
+        description: "Este libro ya está siendo monitoreado",
         variant: "destructive",
       });
       return;
@@ -129,10 +154,49 @@ const Admin = () => {
     navigate("/");
   };
 
-  if (loading) {
+  if (loading || adminCheckLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Check if user is not an admin
+  if (isAdmin === false) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background">
+        <Navbar />
+        <main className="container mx-auto px-4 py-12 max-w-4xl">
+          <Card className="border-destructive/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                Acceso No Autorizado
+              </CardTitle>
+              <CardDescription>
+                No tienes permisos de administrador para acceder a esta página.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  El panel de administración está restringido a usuarios con rol de administrador.
+                  Si crees que deberías tener acceso, contacta al administrador del sistema.
+                </p>
+                <div className="flex gap-3">
+                  <Button onClick={() => navigate("/")} variant="outline">
+                    Volver al inicio
+                  </Button>
+                  <Button onClick={handleLogout} variant="destructive">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Cerrar sesión
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </main>
       </div>
     );
   }
@@ -173,11 +237,17 @@ const Admin = () => {
               <Input
                 placeholder="Código del libro (ej: DA, CS, PP)"
                 value={newBookCode}
-                onChange={(e) => setNewBookCode(e.target.value.toUpperCase())}
+                onChange={(e) => setNewBookCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
                 disabled={importing}
                 className="max-w-xs"
+                maxLength={10}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !importing) {
+                    handleImportBook();
+                  }
+                }}
               />
-              <Button onClick={handleImportBook} disabled={importing}>
+              <Button onClick={handleImportBook} disabled={importing || !newBookCode.trim()}>
                 {importing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Importar libro
               </Button>
