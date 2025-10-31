@@ -16,27 +16,36 @@ export type Database = {
     Tables: {
       books: {
         Row: {
+          book_code_api: string | null
           code: string
           created_at: string | null
           id: string
+          imported_at: string | null
+          language: string | null
           last_check_date: string | null
           title: string
           total_changes: number | null
           updated_at: string | null
         }
         Insert: {
+          book_code_api?: string | null
           code: string
           created_at?: string | null
           id?: string
+          imported_at?: string | null
+          language?: string | null
           last_check_date?: string | null
           title: string
           total_changes?: number | null
           updated_at?: string | null
         }
         Update: {
+          book_code_api?: string | null
           code?: string
           created_at?: string | null
           id?: string
+          imported_at?: string | null
+          language?: string | null
           last_check_date?: string | null
           title?: string
           total_changes?: number | null
@@ -78,6 +87,51 @@ export type Database = {
             columns: ["book_id"]
             isOneToOne: false
             referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comments: {
+        Row: {
+          chapter_id: string
+          comment_text: string
+          created_at: string
+          id: string
+          paragraph_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          chapter_id: string
+          comment_text: string
+          created_at?: string
+          id?: string
+          paragraph_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          chapter_id?: string
+          comment_text?: string
+          created_at?: string
+          id?: string
+          paragraph_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_paragraph_id_fkey"
+            columns: ["paragraph_id"]
+            isOneToOne: false
+            referencedRelation: "paragraphs"
             referencedColumns: ["id"]
           },
         ]

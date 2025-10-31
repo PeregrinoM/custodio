@@ -220,7 +220,7 @@ export async function compareBookVersion(
  */
 export async function importBook(bookData: EGWBook): Promise<string> {
   try {
-    // Insert book
+    // Insert book with metadata
     const { data: book, error: bookError } = await supabase
       .from('books')
       .insert({
@@ -228,6 +228,9 @@ export async function importBook(bookData: EGWBook): Promise<string> {
         code: bookData.code,
         total_changes: 0,
         last_check_date: new Date().toISOString(),
+        imported_at: new Date().toISOString(),
+        language: 'es',
+        book_code_api: bookData.code,
       })
       .select()
       .single();

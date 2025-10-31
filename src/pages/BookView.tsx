@@ -3,10 +3,12 @@ import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Book, Chapter } from "@/types/database";
 import Navbar from "@/components/Navbar";
-import ChapterCard from "@/components/ChapterCard";
-import { Loader2, ArrowLeft } from "lucide-react";
+import ChapterTable from "@/components/ChapterTable";
+import { Loader2, ArrowLeft, Calendar, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 const BookView = () => {
   const { id } = useParams<{ id: string }>();
@@ -85,23 +87,43 @@ const BookView = () => {
           </Link>
 
           <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">{book.title}</h1>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span>Código: {book.code}</span>
+            <h1 className="text-3xl font-bold mb-4">{book.title}</h1>
+            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mb-4">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Código:</span>
+                <span>{book.code}</span>
+              </div>
               <span>•</span>
-              <span>{chapters.length} capítulo(s)</span>
+              <div className="flex items-center gap-2">
+                <Globe className="h-4 w-4" />
+                <span>Español</span>
+              </div>
               <span>•</span>
-              <span>{book.total_changes} cambio(s) detectado(s)</span>
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                <span>
+                  Importado el:{" "}
+                  {format(new Date(book.imported_at), "d 'de' MMMM 'de' yyyy", {
+                    locale: es,
+                  })}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 text-sm">
+              <span className="font-medium">
+                {chapters.length} capítulo{chapters.length !== 1 ? "s" : ""}
+              </span>
+              <span>•</span>
+              <span className="font-medium">
+                {book.total_changes} cambio{book.total_changes !== 1 ? "s" : ""} detectado
+                {book.total_changes !== 1 ? "s" : ""}
+              </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {chapters.map((chapter) => (
-              <ChapterCard key={chapter.id} chapter={chapter} bookId={book.id} />
-            ))}
-          </div>
-
-          {chapters.length === 0 && (
+          {chapters.length > 0 ? (
+            <ChapterTable chapters={chapters} />
+          ) : (
             <div className="text-center py-12 text-muted-foreground">
               No hay capítulos disponibles para este libro
             </div>

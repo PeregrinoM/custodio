@@ -5,8 +5,10 @@ import { Chapter, Paragraph, ChangeHistoryEntry } from "@/types/database";
 import Navbar from "@/components/Navbar";
 import ParagraphItem from "@/components/ParagraphItem";
 import DiffViewer from "@/components/DiffViewer";
+import CommentSection from "@/components/CommentSection";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { Link } from "react-router-dom";
 
 const ChapterView = () => {
@@ -123,6 +125,10 @@ const ChapterView = () => {
               No hay párrafos disponibles para este capítulo
             </div>
           )}
+
+          <Separator className="my-8" />
+
+          <CommentSection chapterId={id!} />
         </div>
       </main>
 

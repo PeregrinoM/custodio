@@ -384,6 +384,129 @@ VITE_SUPABASE_PUBLISHABLE_KEY (auto-configurado)
 - Auth providers: Email/Password
 - RLS: ✅ Habilitado en todas las tablas
 
+---
+
+## Fase 2: Sistema de Comentarios y Mejoras (Implementado)
+
+### Nuevas Tablas
+
+**`comments`**
+```sql
+- id: uuid (PK)
+- chapter_id: uuid (FK -> chapters)
+- paragraph_id: uuid (FK -> paragraphs, nullable)
+- user_id: uuid (referencia a auth.users)
+- comment_text: text
+- created_at, updated_at: timestamps
+```
+
+**RLS Policies para Comments:**
+- ✅ Lectura pública (todos pueden ver comentarios)
+- ✅ Solo admins pueden insertar comentarios
+- ✅ Solo admins pueden actualizar sus propios comentarios
+- ✅ Solo admins pueden eliminar sus propios comentarios
+
+### Campos Adicionales en `books`
+
+```sql
+- imported_at: timestamp (fecha de importación desde API)
+- language: text (siempre 'es' para español)
+- book_code_api: text (código usado en la API EGW)
+```
+
+### Componentes Nuevos
+
+**`ChapterTable.tsx`**
+- Tabla tabular de capítulos con número, título y contador de cambios
+- Navegación directa al hacer clic en cualquier fila
+- Badges visuales para cambios (rojo si hay cambios, gris si no)
+
+**`CommentSection.tsx`**
+- Interfaz de comentarios para capítulos
+- CRUD completo para administradores
+- Visualización de historial de comentarios
+- Edición y eliminación inline
+- Timestamps relativos en español
+
+### Mejoras en Vistas Existentes
+
+**`BookView.tsx`**
+- Muestra metadata completa: código, idioma, fecha de importación
+- Tabla de capítulos en lugar de tarjetas
+- Formato de fechas localizado en español
+- Información de cambios acumulados
+
+**`ChapterView.tsx`**
+- Integración del sistema de comentarios
+- Separador visual entre párrafos y comentarios
+- Acceso rápido al historial de cambios por párrafo
+
+### Funciones Corregidas
+
+**`update_updated_at_column()`**
+- ✅ Ahora incluye `SET search_path = public` (corrige advertencia de QA)
+
+### Modo Monolingüe (Solo Español)
+
+- Todos los textos importados son en español
+- Book code API siempre corresponde a libros en español (ej: "DTG")
+- No hay selector de idioma
+- Todas las fechas y mensajes están localizados en español (es-ES)
+
+### Testing de la API EGW
+
+Para probar la integración con la API de EGW Writings:
+
+**Código de ejemplo: "DTG"** (El Deseado de Todas las Gentes)
+
+```graphql
+query GetBook($pubCode: String!) {
+  publication(pubCode: $pubCode, lang: "es") {
+    title
+    pubCode
+    content {
+      chapter
+      chapterTitle
+      paragraphs {
+        content
+      }
+    }
+  }
+}
+```
+
+**Variables:**
+```json
+{
+  "pubCode": "DTG"
+}
+```
+
+**Endpoint:** `https://org-api.egwwritings.org/graphql`
+
+### Flujo de Comentarios
+
+```
+Admin en ChapterView → CommentSection
+           ↓
+    Escribe comentario
+           ↓
+    INSERT en tabla comments
+           ↓
+    Notificación toast
+           ↓
+    Recarga automática de comentarios
+```
+
+### Seguridad de Comentarios
+
+- ✅ Solo admins autenticados pueden comentar
+- ✅ Los usuarios solo pueden editar/eliminar sus propios comentarios
+- ✅ Validación de permisos a nivel de RLS
+- ✅ Verificación de sesión en cada operación
+
+---
+
 ## Referencias
 
 - [EGW Writings API](https://org-api.egwwritings.org/graphql)

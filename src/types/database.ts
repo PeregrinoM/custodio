@@ -6,6 +6,19 @@ export interface Book {
   total_changes: number;
   created_at: string;
   updated_at: string;
+  imported_at: string;
+  language: string;
+  book_code_api: string | null;
+}
+
+export interface Comment {
+  id: string;
+  chapter_id: string;
+  paragraph_id: string | null;
+  user_id: string;
+  comment_text: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Chapter {
