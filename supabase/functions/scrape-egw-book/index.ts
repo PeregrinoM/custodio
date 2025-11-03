@@ -141,12 +141,25 @@ serve(async (req) => {
 function parseTableOfContents(html: string, bookId: string): Array<{title: string, url: string}> {
   const chapters: Array<{title: string, url: string}> = [];
   
-  // Regex para encontrar enlaces de capítulos en el TOC
-  // Formato: <a href="/es/book/174.38#38">Capítulo 1—Dios con nosotros</a>
-  const chapterRegex = /<a\s+href="\/es\/book\/(\d+\.\d+)#(\d+)"[^>]*>([^<]+)<\/a>/g;
+  // 🔍 DEBUG: Log HTML sample to understand structure
+  console.log('[DEBUG] TOC HTML length:', html.length);
+  console.log('[DEBUG] First 2000 chars of HTML:', html.substring(0, 2000));
   
+  // Try multiple regex patterns to find chapters
+  
+  // Pattern 1: Original pattern - strict matching
+  const pattern1 = /<a\s+href="\/es\/book\/(\d+\.\d+)#(\d+)"[^>]*>([^<]+)<\/a>/g;
+  
+  // Pattern 2: More permissive - any link with book ID
+  const pattern2 = /<a[^>]*href="[^"]*\/book\/(\d+\.\d+)[^"]*"[^>]*>([^<]+)<\/a>/g;
+  
+  // Pattern 3: Look for any structure with chapter numbers
+  const pattern3 = /(?:cap[ií]tulo|chapter)\s*\d+/gi;
+  
+  console.log('[DEBUG] Testing Pattern 1 (strict)...');
   let match;
-  while ((match = chapterRegex.exec(html)) !== null) {
+  while ((match = pattern1.exec(html)) !== null) {
+    console.log('[DEBUG] Pattern 1 match:', match);
     const paragraphId = match[1];
     const anchorId = match[2];
     const title = match[3].trim();
@@ -159,9 +172,41 @@ function parseTableOfContents(html: string, bookId: string): Array<{title: strin
     }
   }
   
-  console.log(`[PARSER] Capítulos encontrados: ${chapters.length}`);
+  if (chapters.length === 0) {
+    console.log('[DEBUG] Pattern 1 failed, trying Pattern 2 (permissive)...');
+    while ((match = pattern2.exec(html)) !== null) {
+      console.log('[DEBUG] Pattern 2 match:', match);
+      const paragraphId = match[1];
+      const title = match[2].trim();
+      
+      if (title.length > 0 && title.toLowerCase().includes('cap')) {
+        chapters.push({
+          title: title,
+          url: `https://m.egwwritings.org/es/book/${paragraphId}`
+        });
+      }
+    }
+  }
+  
+  if (chapters.length === 0) {
+    console.log('[DEBUG] Pattern 2 failed, checking if HTML contains chapter references...');
+    const chapterMentions = html.match(pattern3);
+    console.log('[DEBUG] Found chapter mentions:', chapterMentions ? chapterMentions.length : 0);
+    if (chapterMentions) {
+      console.log('[DEBUG] Sample mentions:', chapterMentions.slice(0, 5));
+    }
+    
+    // Log a bigger HTML sample for manual inspection
+    console.log('[DEBUG] HTML sample around first "capítulo" mention:');
+    const capIndex = html.toLowerCase().indexOf('capítulo');
+    if (capIndex > -1) {
+      console.log('[DEBUG] Context:', html.substring(Math.max(0, capIndex - 200), capIndex + 500));
+    }
+  }
+  
+  console.log(`[PARSER] Total chapters found: ${chapters.length}`);
   if (chapters.length > 0) {
-    console.log(`[PARSER] Primeros 3 capítulos: ${chapters.slice(0, 3).map(c => c.title).join(', ')}`);
+    console.log(`[PARSER] First 3 chapters:`, chapters.slice(0, 3));
   }
   
   return chapters;
