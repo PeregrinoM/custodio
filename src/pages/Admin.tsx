@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchBook } from "@/lib/egwApi";
+import { fetchBook, getAvailableBookCodes, isValidBookCode, getBookInfo } from "@/lib/egwApi";
 import { compareBookVersion, importBook } from "@/lib/compareUtils";
 import { Book } from "@/types/database";
 import { useAdminCheck } from "@/hooks/useAdminCheck";
@@ -10,7 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, BookPlus, RefreshCw, LogOut, AlertTriangle } from "lucide-react";
+import { Loader2, BookPlus, RefreshCw, LogOut, AlertTriangle, Copy } from "lucide-react";
+
+interface ImportProgress {
+  status: string;
+  current: number;
+  total: number;
+  chapterName: string;
+}
 
 const Admin = () => {
   const [user, setUser] = useState<any>(null);
@@ -19,6 +26,8 @@ const Admin = () => {
   const [comparing, setComparing] = useState<string | null>(null);
   const [newBookCode, setNewBookCode] = useState("");
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
+  const [scrapingErrors, setScrapingErrors] = useState<string[]>([]);
   const { isAdmin, loading: adminCheckLoading } = useAdminCheck();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -100,11 +109,11 @@ const Admin = () => {
       return;
     }
 
-    // Validate only uppercase letters
-    if (!/^[A-Z]+$/.test(trimmedCode)) {
+    // Validate with available book codes
+    if (!isValidBookCode(trimmedCode)) {
       toast({
-        title: "Error",
-        description: "El código debe contener solo letras mayúsculas",
+        title: "Código inválido",
+        description: `Códigos válidos: ${getAvailableBookCodes().join(', ')}`,
         variant: "destructive",
       });
       return;
@@ -121,27 +130,51 @@ const Admin = () => {
     }
 
     setImporting(true);
+    setImportProgress({
+      status: 'Iniciando scraping...',
+      current: 0,
+      total: 0,
+      chapterName: ''
+    });
+
     try {
-      toast({
-        title: "Importando...",
-        description: `Obteniendo datos del libro ${newBookCode}`,
+      const bookInfo = getBookInfo(trimmedCode);
+      
+      setImportProgress({
+        status: `Extrayendo ${bookInfo?.title}...`,
+        current: 0,
+        total: 0,
+        chapterName: ''
       });
 
-      const bookData = await fetchBook(newBookCode);
-      await importBook(bookData);
+      const bookData = await fetchBook(trimmedCode);
+      
+      setImportProgress({
+        status: 'Guardando en base de datos...',
+        current: 0,
+        total: bookData.chapters.length,
+        chapterName: ''
+      });
 
+      await importBook(bookData);
+      
+      setImportProgress(null);
       toast({
-        title: "Libro importado",
-        description: `${bookData.title} ha sido agregado exitosamente`,
+        title: "✅ Libro importado exitosamente",
+        description: `${bookData.title}: ${bookData.chapters.length} capítulos importados`,
       });
 
       setNewBookCode("");
       await loadBooks();
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
+      setScrapingErrors(prev => [...prev, `${new Date().toLocaleString()}: ${errorMsg}`]);
+      
+      setImportProgress(null);
       console.error("Error importing book:", error);
       toast({
-        title: "Error",
-        description: "No se pudo importar el libro. Verifica el código.",
+        title: "❌ Error al importar",
+        description: errorMsg,
         variant: "destructive",
       });
     } finally {
@@ -229,13 +262,13 @@ const Admin = () => {
               Agregar nuevo libro
             </CardTitle>
             <CardDescription>
-              Ingresa el código de un libro de EGW Writings para comenzar a monitorearlo
+              Ingresa el código de un libro de EGW Writings para comenzar a monitorearlo. Códigos disponibles: {getAvailableBookCodes().join(', ')}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-3">
+            <div className="flex gap-3 mb-4">
               <Input
-                placeholder="Código del libro (ej: DA, CS, PP)"
+                placeholder="Código del libro (ej: DTG, CS, PP)"
                 value={newBookCode}
                 onChange={(e) => setNewBookCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
                 disabled={importing}
@@ -252,6 +285,50 @@ const Admin = () => {
                 Importar libro
               </Button>
             </div>
+
+            {/* Import Progress Indicator */}
+            {importProgress && (
+              <Card className="p-4 bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800">
+                <div className="flex items-center gap-3">
+                  <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full" />
+                  <div className="flex-1">
+                    <p className="font-medium text-blue-900 dark:text-blue-100">{importProgress.status}</p>
+                    {importProgress.total > 0 && (
+                      <div className="mt-2">
+                        <div className="w-full bg-blue-200 dark:bg-blue-900 rounded-full h-2">
+                          <div 
+                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
+                          />
+                        </div>
+                        <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                          {importProgress.current} / {importProgress.total} capítulos
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* Error Display */}
+            {scrapingErrors.length > 0 && (
+              <div className="mt-4">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    const errors = scrapingErrors.join('\n\n');
+                    navigator.clipboard.writeText(errors);
+                    toast({ title: 'Errores copiados al portapapeles' });
+                  }}
+                  className="text-destructive border-destructive/50 hover:bg-destructive/10"
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  ⚠️ Ver errores ({scrapingErrors.length})
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 

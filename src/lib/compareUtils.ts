@@ -97,9 +97,12 @@ export async function compareBookVersion(
       if (parasError) throw parasError;
 
       // Compare each paragraph
-      for (const newParagraph of newChapter.paragraphs) {
+      for (let pIndex = 0; pIndex < newChapter.paragraphs.length; pIndex++) {
+        const newParagraph = newChapter.paragraphs[pIndex];
+        const paragraphNumber = pIndex + 1;
+        
         const existingParagraph = paragraphs?.find(
-          p => p.paragraph_number === newParagraph.number
+          p => p.paragraph_number === paragraphNumber
         );
 
         // Handle newly added paragraphs
@@ -108,9 +111,10 @@ export async function compareBookVersion(
             .from('paragraphs')
             .insert({
               chapter_id: existingChapter.id,
-              paragraph_number: newParagraph.number,
-              base_text: newParagraph.text,
-              latest_text: newParagraph.text,
+              paragraph_number: paragraphNumber,
+              base_text: newParagraph.content,
+              latest_text: newParagraph.content,
+              refcode_short: newParagraph.refcode_short,
               has_changed: false,
               change_history: [],
             });
@@ -123,7 +127,7 @@ export async function compareBookVersion(
 
         const comparison = compareParagraphs(
           existingParagraph.latest_text,
-          newParagraph.text
+          newParagraph.content
         );
 
         if (comparison.hasChanged) {
@@ -145,7 +149,7 @@ export async function compareBookVersion(
           const { error: updateError } = await supabase
             .from('paragraphs')
             .update({
-              latest_text: newParagraph.text,
+              latest_text: newParagraph.content,
               has_changed: true,
               change_history: changeHistory,
               updated_at: new Date().toISOString(),
@@ -253,11 +257,12 @@ export async function importBook(bookData: EGWBook): Promise<string> {
       if (chapterError) throw chapterError;
 
       // Insert paragraphs in batches
-      const paragraphsToInsert = chapterData.paragraphs.map(para => ({
+      const paragraphsToInsert = chapterData.paragraphs.map((para, pIndex) => ({
         chapter_id: chapter.id,
-        paragraph_number: para.number,
-        base_text: para.text,
-        latest_text: para.text,
+        paragraph_number: pIndex + 1,
+        base_text: para.content,
+        latest_text: para.content,
+        refcode_short: para.refcode_short,
         has_changed: false,
         change_history: [],
       }));

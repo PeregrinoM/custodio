@@ -146,6 +146,7 @@ export type Database = {
           id: string
           latest_text: string
           paragraph_number: number
+          refcode_short: string | null
           updated_at: string | null
         }
         Insert: {
@@ -157,6 +158,7 @@ export type Database = {
           id?: string
           latest_text: string
           paragraph_number: number
+          refcode_short?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -168,6 +170,7 @@ export type Database = {
           id?: string
           latest_text?: string
           paragraph_number?: number
+          refcode_short?: string | null
           updated_at?: string | null
         }
         Relationships: [

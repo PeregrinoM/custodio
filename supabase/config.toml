@@ -1,1 +1,4 @@
 project_id = "zaaiorcdjhvkckbktiii"
+
+[functions.scrape-egw-book]
+verify_jwt = true

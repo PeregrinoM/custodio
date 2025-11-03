@@ -1,14 +1,13 @@
 /**
- * EGW Writings API Integration
- * Fetches book data from the official EGW Writings GraphQL API
+ * EGW Writings Scraping Integration
+ * Fetches book data from egwwritings.org mobile site via web scraping
  */
 
-const EGW_API_URL = 'https://org-api.egwwritings.org/graphql';
+import { supabase } from '@/integrations/supabase/client';
 
-export interface EGWBook {
-  title: string;
-  code: string;
-  chapters: EGWChapter[];
+export interface EGWParagraph {
+  content: string;
+  refcode_short: string;
 }
 
 export interface EGWChapter {
@@ -17,128 +16,93 @@ export interface EGWChapter {
   paragraphs: EGWParagraph[];
 }
 
-export interface EGWParagraph {
-  number: number;
-  text: string;
+export interface EGWBook {
+  title: string;
+  code: string;
+  chapters: EGWChapter[];
 }
 
-interface GraphQLResponse<T> {
-  data?: T;
-  errors?: Array<{ message: string }>;
-}
+// Mapeo de códigos a IDs de libros en egwwritings.org
+const BOOK_ID_MAP: Record<string, { id: number; title: string }> = {
+  'DTG': { id: 174, title: 'El Deseado de Todas las Gentes' },
+  'DA': { id: 174, title: 'El Deseado de Todas las Gentes' }, // Alias
+  'CS': { id: 132, title: 'El Conflicto de los Siglos' },
+  'GC': { id: 132, title: 'El Conflicto de los Siglos' }, // Alias
+  'PP': { id: 84, title: 'Patriarcas y Profetas' },
+  'PR': { id: 88, title: 'Profetas y Reyes' },
+  'HAp': { id: 127, title: 'Los Hechos de los Apóstoles' },
+};
 
 /**
- * Fetch a complete book from EGW Writings API
- * @param bookCode - The book code (e.g., "DA" for El Deseado de Todas las Gentes)
+ * Obtiene un libro mediante scraping usando la Edge Function de Supabase
  */
-export async function fetchBook(bookCode: string): Promise<EGWBook> {
-  const query = `
-    query GetBook($pubCode: String!) {
-      publication(pubCode: $pubCode, lang: "es") {
-        title
-        pubCode
-        content {
-          chapter
-          chapterTitle
-          refcode_short
-          para_count
-          paragraphs {
-            content
-            refcode_short
-          }
-        }
-      }
-    }
-  `;
-
-  try {
-    const response = await fetch(EGW_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query,
-        variables: { pubCode: bookCode },
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result: GraphQLResponse<{ publication: any }> = await response.json();
-
-    if (result.errors) {
-      throw new Error(`GraphQL errors: ${result.errors.map(e => e.message).join(', ')}`);
-    }
-
-    if (!result.data?.publication) {
-      throw new Error('No book data returned from API');
-    }
-
-    // Normalize the API response to our schema
-    return normalizeBookData(result.data.publication, bookCode);
-  } catch (error) {
-    console.error('Error fetching book from EGW API:', error);
-    throw new Error(`Failed to fetch book ${bookCode}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
-}
-
-/**
- * Normalize EGW API response to our database schema
- */
-function normalizeBookData(apiData: any, bookCode: string): EGWBook {
-  const chapters: EGWChapter[] = [];
+export async function fetchBook(code: string): Promise<EGWBook> {
+  const bookInfo = BOOK_ID_MAP[code.toUpperCase()];
   
-  if (apiData.content && Array.isArray(apiData.content)) {
-    // Group paragraphs by chapter
-    const chapterMap = new Map<number, EGWChapter>();
-    
-    apiData.content.forEach((item: any) => {
-      const chapterNum = item.chapter || 1;
-      
-      if (!chapterMap.has(chapterNum)) {
-        chapterMap.set(chapterNum, {
-          number: chapterNum,
-          title: item.chapterTitle || `Capítulo ${chapterNum}`,
-          paragraphs: [],
-        });
-      }
-      
-      const chapter = chapterMap.get(chapterNum)!;
-      
-      if (item.paragraphs && Array.isArray(item.paragraphs)) {
-        item.paragraphs.forEach((para: any, index: number) => {
-          if (para.content && para.content.trim()) {
-            chapter.paragraphs.push({
-              number: chapter.paragraphs.length + 1,
-              text: para.content.trim(),
-            });
-          }
-        });
-      }
-    });
-    
-    // Convert map to array and sort by chapter number
-    chapters.push(...Array.from(chapterMap.values()).sort((a, b) => a.number - b.number));
+  if (!bookInfo) {
+    throw new Error(
+      `Código de libro desconocido: ${code}.\n` +
+      `Códigos disponibles: ${Object.keys(BOOK_ID_MAP).join(', ')}`
+    );
   }
 
-  return {
-    title: apiData.title || 'Título desconocido',
-    code: bookCode.toUpperCase(),
-    chapters,
-  };
+  console.log(`[EGW] Iniciando importación de ${bookInfo.title} (${code})...`);
+
+  try {
+    const { data, error } = await supabase.functions.invoke('scrape-egw-book', {
+      body: { bookId: bookInfo.id }
+    });
+
+    if (error) {
+      console.error('[EGW] Error en Edge Function:', error);
+      throw error;
+    }
+    
+    if (!data || !data.success || !data.chapters) {
+      throw new Error('La respuesta del scraper no contiene capítulos válidos');
+    }
+
+    console.log(`[EGW] ✅ Scraping completado: ${data.totalChapters} capítulos obtenidos`);
+
+    // Normalizar al formato EGWBook
+    return {
+      title: bookInfo.title,
+      code: code.toUpperCase(),
+      chapters: data.chapters.map((ch: any) => ({
+        number: ch.number,
+        title: ch.title,
+        paragraphs: ch.paragraphs.map((p: any) => ({
+          content: p.content,
+          refcode_short: p.refcode
+        }))
+      }))
+    };
+
+  } catch (error) {
+    console.error('[EGW] Error al importar libro:', error);
+    throw new Error(
+      `Error al importar ${bookInfo.title}: ${error instanceof Error ? error.message : 'Error desconocido'}`
+    );
+  }
 }
 
 /**
- * Validate if a book code exists in the EGW API
+ * Lista de códigos de libros disponibles
  */
-export async function validateBookCode(bookCode: string): Promise<boolean> {
-  try {
-    await fetchBook(bookCode);
-    return true;
-  } catch {
-    return false;
-  }
+export function getAvailableBookCodes(): string[] {
+  return Object.keys(BOOK_ID_MAP);
+}
+
+/**
+ * Valida si un código de libro está disponible
+ */
+export function isValidBookCode(code: string): boolean {
+  return code.toUpperCase() in BOOK_ID_MAP;
+}
+
+/**
+ * Obtiene información de un libro por código
+ */
+export function getBookInfo(code: string): { id: number; title: string } | null {
+  return BOOK_ID_MAP[code.toUpperCase()] || null;
 }
