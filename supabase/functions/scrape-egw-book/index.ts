@@ -22,13 +22,38 @@ serve(async (req) => {
   }
 
   try {
-    const { bookId } = await req.json();
+    const { bookId, testMode } = await req.json();
     
     if (!bookId) {
       throw new Error('bookId es requerido');
     }
 
     console.log(`[SCRAPING] Iniciando scraping del libro ID: ${bookId}`);
+
+    // Modo de prueba para debugging
+    if (testMode) {
+      console.log('[TEST MODE] Probando solo obtención de TOC');
+      const tocUrl = `https://m.egwwritings.org/es/book/${bookId}.2/toc`;
+      const tocResponse = await fetch(tocUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        }
+      });
+      
+      const tocHtml = await tocResponse.text();
+      const chapters = parseTableOfContents(tocHtml, bookId);
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          testMode: true,
+          tocLength: tocHtml.length,
+          chaptersFound: chapters.length,
+          sampleChapters: chapters.slice(0, 3)
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Paso 1: Obtener índice de capítulos
     const tocUrl = `https://m.egwwritings.org/es/book/${bookId}.2/toc`;
@@ -124,64 +149,85 @@ function parseTableOfContents(html: string, bookId: string): Array<{title: strin
   while ((match = chapterRegex.exec(html)) !== null) {
     const paragraphId = match[1];
     const anchorId = match[2];
-    const title = match[2].trim();
+    const title = match[3].trim();
     
-    chapters.push({
-      title: title,
-      url: `https://m.egwwritings.org/es/book/${paragraphId}#${anchorId}`
-    });
+    if (title.length > 0) {
+      chapters.push({
+        title: title,
+        url: `https://m.egwwritings.org/es/book/${paragraphId}#${anchorId}`
+      });
+    }
   }
   
-  console.log(`[PARSER] Capítulos encontrados: ${chapters.map(c => c.title).join(', ')}`);
+  console.log(`[PARSER] Capítulos encontrados: ${chapters.length}`);
+  if (chapters.length > 0) {
+    console.log(`[PARSER] Primeros 3 capítulos: ${chapters.slice(0, 3).map(c => c.title).join(', ')}`);
+  }
   
   return chapters;
 }
 
 async function scrapeChapter(url: string): Promise<Paragraph[]> {
-  console.log(`[SCRAPER] Obteniendo contenido de: ${url}`);
-  
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    }
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Error HTTP ${response.status} al obtener capítulo`);
-  }
-  
-  const html = await response.text();
-  const paragraphs: Paragraph[] = [];
-  
-  // Regex para encontrar párrafos con su refcode
-  // Formato: <span class="egw_content" data-refcode="174.221" data-refcode-old="DTG 46.1">contenido</span>
-  const paragraphRegex = /<span[^>]*class="[^"]*egw_content[^"]*"[^>]*data-refcode-old="([^"]+)"[^>]*>([\s\S]*?)<\/span>/g;
-  
-  let match;
-  while ((match = paragraphRegex.exec(html)) !== null) {
-    const refcode = match[1].trim();
-    let content = match[2].trim();
+  try {
+    console.log(`[SCRAPER] Obteniendo contenido de: ${url}`);
     
-    // Limpiar HTML interno (tags, comentarios, etc.)
-    content = content
-      .replace(/<[^>]+>/g, '') // Eliminar tags HTML
-      .replace(/&nbsp;/g, ' ') // Reemplazar nbsp
-      .replace(/&quot;/g, '"') // Reemplazar comillas
-      .replace(/&#8220;/g, '"') // Comilla izquierda
-      .replace(/&#8221;/g, '"') // Comilla derecha
-      .replace(/&#8211;/g, '—') // Em dash
-      .replace(/&amp;/g, '&') // Reemplazar ampersand
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/\s+/g, ' ') // Normalizar espacios
-      .trim();
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      }
+    });
     
-    if (content.length > 0) {
-      paragraphs.push({ content, refcode });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${response.statusText} para ${url}`);
     }
+    
+    const html = await response.text();
+    
+    if (html.length < 100) {
+      throw new Error(`Respuesta muy corta (${html.length} bytes), posible página de error`);
+    }
+    
+    const paragraphs: Paragraph[] = [];
+    
+    // Regex para encontrar párrafos con su refcode
+    // Formato: <span class="egw_content" data-refcode="174.221" data-refcode-old="DTG 46.1">contenido</span>
+    const paragraphRegex = /<span[^>]*class="[^"]*egw_content[^"]*"[^>]*data-refcode-old="([^"]+)"[^>]*>([\s\S]*?)<\/span>/g;
+    
+    let match;
+    while ((match = paragraphRegex.exec(html)) !== null) {
+      const refcode = match[1].trim();
+      let content = match[2].trim();
+      
+      // Limpiar HTML interno (tags, comentarios, etc.)
+      content = content
+        .replace(/<[^>]+>/g, '') // Eliminar tags HTML
+        .replace(/&nbsp;/g, ' ') // Reemplazar nbsp
+        .replace(/&quot;/g, '"') // Reemplazar comillas
+        .replace(/&#8220;/g, '"') // Comilla izquierda
+        .replace(/&#8221;/g, '"') // Comilla derecha
+        .replace(/&#8211;/g, '—') // Em dash
+        .replace(/&#8212;/g, '—') // Em dash largo
+        .replace(/&amp;/g, '&') // Reemplazar ampersand
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/\s+/g, ' ') // Normalizar espacios
+        .trim();
+      
+      if (content.length > 0) {
+        paragraphs.push({ content, refcode });
+      }
+    }
+    
+    console.log(`[SCRAPER] ✅ Párrafos extraídos: ${paragraphs.length}`);
+    
+    if (paragraphs.length === 0) {
+      console.warn(`[SCRAPER] ⚠️ No se encontraron párrafos en ${url}`);
+    }
+    
+    return paragraphs;
+    
+  } catch (error) {
+    console.error(`[SCRAPER] ❌ Error al obtener ${url}:`, error);
+    throw error;
   }
-  
-  console.log(`[SCRAPER] Párrafos extraídos: ${paragraphs.length}`);
-  
-  return paragraphs;
 }

@@ -230,11 +230,11 @@ export async function importBook(bookData: EGWBook): Promise<string> {
       .insert({
         title: bookData.title,
         code: bookData.code,
+        book_code_api: bookData.code,
         total_changes: 0,
         last_check_date: new Date().toISOString(),
         imported_at: new Date().toISOString(),
         language: 'es',
-        book_code_api: bookData.code,
       })
       .select()
       .single();
@@ -262,7 +262,7 @@ export async function importBook(bookData: EGWBook): Promise<string> {
         paragraph_number: pIndex + 1,
         base_text: para.content,
         latest_text: para.content,
-        refcode_short: para.refcode_short,
+        refcode_short: para.refcode_short || '',
         has_changed: false,
         change_history: [],
       }));

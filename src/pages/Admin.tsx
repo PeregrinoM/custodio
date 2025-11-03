@@ -167,15 +167,35 @@ const Admin = () => {
       setNewBookCode("");
       await loadBooks();
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
-      setScrapingErrors(prev => [...prev, `${new Date().toLocaleString()}: ${errorMsg}`]);
-      
       setImportProgress(null);
-      console.error("Error importing book:", error);
+      console.error('❌ Detalles del error de importación:', {
+        error,
+        message: error instanceof Error ? error.message : 'Desconocido',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      let errorMessage = 'Error desconocido';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        
+        // Proporcionar mensajes de error más útiles
+        if (errorMessage.includes('Edge Function') || errorMessage.includes('FunctionsHttpError')) {
+          errorMessage = 'Error en el scraper. Revisa los logs del backend para más detalles.';
+        } else if (errorMessage.includes('violates') || errorMessage.includes('duplicate')) {
+          errorMessage = 'El libro ya existe en la base de datos. Usa "Comparar" en su lugar.';
+        } else if (errorMessage.includes('No se encontraron capítulos')) {
+          errorMessage = 'No se pudieron extraer capítulos del sitio. Verifica el código del libro.';
+        }
+      }
+      
+      setScrapingErrors(prev => [...prev, `${new Date().toLocaleString()}: ${errorMessage}`]);
+      
       toast({
-        title: "❌ Error al importar",
-        description: errorMsg,
-        variant: "destructive",
+        title: '❌ Error al importar',
+        description: errorMessage,
+        variant: 'destructive',
+        duration: 10000
       });
     } finally {
       setImporting(false);
