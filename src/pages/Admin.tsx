@@ -28,6 +28,8 @@ const Admin = () => {
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
   const [scrapingErrors, setScrapingErrors] = useState<string[]>([]);
+  const [debugHtml, setDebugHtml] = useState<any>(null);
+  const [isDebugging, setIsDebugging] = useState(false);
   const { isAdmin, loading: adminCheckLoading } = useAdminCheck();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -202,6 +204,36 @@ const Admin = () => {
     }
   };
 
+  const handleDebugToc = async () => {
+    setIsDebugging(true);
+    setDebugHtml(null);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('debug-toc', {
+        body: { bookId: 174 }
+      });
+
+      if (error) throw error;
+      
+      setDebugHtml(data);
+      
+      toast({
+        title: '✅ Debug completado',
+        description: `HTML obtenido: ${data.htmlLength} caracteres`
+      });
+      
+    } catch (error) {
+      console.error('Debug error:', error);
+      toast({
+        title: '❌ Error en debug',
+        description: error instanceof Error ? error.message : 'Error desconocido',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsDebugging(false);
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/");
@@ -273,6 +305,67 @@ const Admin = () => {
             Cerrar sesión
           </Button>
         </div>
+
+        {/* Debug Section */}
+        <Card className="mb-8 p-6 bg-yellow-50 dark:bg-yellow-950/20 border-yellow-300 dark:border-yellow-800">
+          <h2 className="text-xl font-bold mb-4">🔧 Debug: Inspeccionar HTML del TOC</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Esta función obtiene el HTML crudo del índice de capítulos para identificar la estructura correcta.
+          </p>
+          
+          <Button 
+            onClick={handleDebugToc} 
+            disabled={isDebugging}
+            variant="outline"
+          >
+            {isDebugging ? 'Obteniendo HTML...' : '🔍 Obtener HTML del TOC (Libro 174)'}
+          </Button>
+          
+          {debugHtml && (
+            <div className="mt-4 space-y-4">
+              <div className="bg-background p-4 rounded border">
+                <h3 className="font-bold mb-2">Información:</h3>
+                <ul className="text-sm space-y-1">
+                  <li>URL: {debugHtml.url}</li>
+                  <li>Tamaño: {debugHtml.htmlLength} bytes</li>
+                  <li>Content-Type: {debugHtml.contentType}</li>
+                  <li>Status: {debugHtml.statusCode}</li>
+                </ul>
+              </div>
+              
+              <div className="bg-background p-4 rounded border">
+                <h3 className="font-bold mb-2">Sección "capítulo":</h3>
+                <pre className="text-xs overflow-auto max-h-64 bg-muted p-2 rounded">
+                  {debugHtml.chaptersSection}
+                </pre>
+              </div>
+              
+              <div className="bg-background p-4 rounded border">
+                <h3 className="font-bold mb-2">Sección links "&lt;a href":</h3>
+                <pre className="text-xs overflow-auto max-h-64 bg-muted p-2 rounded">
+                  {debugHtml.linksSection}
+                </pre>
+              </div>
+              
+              <div className="bg-background p-4 rounded border">
+                <h3 className="font-bold mb-2">HTML completo (primeros 5000 chars):</h3>
+                <pre className="text-xs overflow-auto max-h-96 bg-muted p-2 rounded">
+                  {debugHtml.htmlSample}
+                </pre>
+              </div>
+              
+              <Button 
+                variant="secondary"
+                onClick={() => {
+                  navigator.clipboard.writeText(debugHtml.fullHtml);
+                  toast({ title: 'HTML completo copiado al portapapeles' });
+                }}
+              >
+                📋 Copiar HTML Completo
+              </Button>
+            </div>
+          )}
+        </Card>
 
         {/* Import New Book Section */}
         <Card className="mb-8 border-primary/20 shadow-lg">
