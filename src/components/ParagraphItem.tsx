@@ -36,6 +36,11 @@ const ParagraphItem = ({ paragraph, onViewHistory }: ParagraphItemProps) => {
       <CardContent>
         <p className="text-sm leading-relaxed">
           {paragraph.latest_text}
+          {paragraph.refcode_short && (
+            <span className="ml-2 text-xs font-mono text-primary/70">
+              {`{${paragraph.refcode_short}}`}
+            </span>
+          )}
         </p>
         {paragraph.has_changed && paragraph.change_history.length > 0 && (
           <div className="mt-3 text-xs text-muted-foreground">

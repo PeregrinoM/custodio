@@ -267,6 +267,19 @@ async function scrapeChapter(url: string): Promise<Paragraph[]> {
     
     if (paragraphs.length === 0) {
       console.warn(`[SCRAPER] ⚠️ No se encontraron párrafos en ${url}`);
+      return paragraphs;
+    }
+    
+    // Filtrar el primer párrafo si es el título del capítulo
+    const firstPara = paragraphs[0];
+    const isTitle = 
+      firstPara.content.toLowerCase().includes('capítulo') ||
+      firstPara.content.length < 100;
+    
+    if (isTitle) {
+      console.log(`[SCRAPER] 🗑️ Eliminando título del capítulo: "${firstPara.content.substring(0, 60)}..."`);
+      paragraphs.shift();
+      console.log(`[SCRAPER] ✅ Párrafos después de filtrar: ${paragraphs.length}`);
     }
     
     return paragraphs;

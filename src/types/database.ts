@@ -39,6 +39,7 @@ export interface Paragraph {
   latest_text: string;
   has_changed: boolean;
   change_history: ChangeHistoryEntry[];
+  refcode_short?: string;
   created_at: string;
   updated_at: string;
 }
