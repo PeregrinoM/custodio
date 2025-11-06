@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchBook, getAvailableBookCodes, isValidBookCode, getBookInfo } from "@/lib/egwApi";
-import { compareBookVersion, importBook } from "@/lib/compareUtils";
+import { compareBookVersion, importBook, deleteBook } from "@/lib/compareUtils";
 import { Book } from "@/types/database";
 import { useAdminCheck } from "@/hooks/useAdminCheck";
 import Navbar from "@/components/Navbar";
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, BookPlus, RefreshCw, LogOut, AlertTriangle, Copy } from "lucide-react";
+import { Loader2, BookPlus, RefreshCw, LogOut, AlertTriangle, Copy, Trash2 } from "lucide-react";
 
 interface ImportProgress {
   status: string;
@@ -24,6 +24,7 @@ const Admin = () => {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [comparing, setComparing] = useState<string | null>(null);
+  const [deletingBook, setDeletingBook] = useState<string | null>(null);
   const [newBookCode, setNewBookCode] = useState("");
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
@@ -95,6 +96,42 @@ const Admin = () => {
       });
     } finally {
       setComparing(null);
+    }
+  };
+
+  const handleDeleteBook = async (bookCode: string, bookTitle: string) => {
+    const confirmed = window.confirm(
+      `⚠️ ¿Estás seguro de eliminar "${bookTitle}" (${bookCode})?\n\n` +
+      `Esta acción eliminará:\n` +
+      `• El libro completo\n` +
+      `• Todos sus capítulos\n` +
+      `• Todos sus párrafos\n` +
+      `• Todo el historial de cambios\n\n` +
+      `⛔ ESTA ACCIÓN NO SE PUEDE DESHACER`
+    );
+
+    if (!confirmed) return;
+
+    setDeletingBook(bookCode);
+
+    try {
+      await deleteBook(bookCode);
+
+      toast({
+        title: "✅ Libro eliminado",
+        description: `${bookTitle} (${bookCode}) fue eliminado correctamente`,
+      });
+
+      await loadBooks();
+    } catch (error) {
+      console.error("Error deleting book:", error);
+      toast({
+        title: "❌ Error al eliminar",
+        description: error instanceof Error ? error.message : "Error desconocido",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingBook(null);
     }
   };
 
@@ -462,7 +499,7 @@ const Admin = () => {
               {books.map((book) => (
                 <Card key={book.id} className="hover:shadow-lg transition-shadow">
                   <CardContent className="pt-6">
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
                         <h3 className="font-display text-xl font-semibold text-foreground mb-2">
                           {book.title}
@@ -477,23 +514,43 @@ const Admin = () => {
                           <p>Cambios totales detectados: <span className="font-semibold text-change-removed">{book.total_changes}</span></p>
                         </div>
                       </div>
-                      <Button
-                        onClick={() => handleCompareBook(book)}
-                        disabled={comparing === book.id}
-                        variant="outline"
-                      >
-                        {comparing === book.id ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Comparando...
-                          </>
-                        ) : (
-                          <>
-                            <RefreshCw className="mr-2 h-4 w-4" />
-                            Revisar cambios
-                          </>
-                        )}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => handleCompareBook(book)}
+                          disabled={comparing === book.id || deletingBook === book.code}
+                          variant="outline"
+                        >
+                          {comparing === book.id ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Comparando...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="mr-2 h-4 w-4" />
+                              Revisar cambios
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          onClick={() => handleDeleteBook(book.code, book.title)}
+                          disabled={deletingBook === book.code || comparing === book.id}
+                          variant="destructive"
+                          size="default"
+                        >
+                          {deletingBook === book.code ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Eliminando...
+                            </>
+                          ) : (
+                            <>
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Eliminar
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
