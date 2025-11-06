@@ -106,6 +106,8 @@ export async function compareBookVersion(
     chapters: [],
   };
 
+  const comparisonDate = new Date().toISOString();
+
   try {
     // Fetch all chapters for this book
     const { data: chapters, error: chaptersError } = await supabase
@@ -248,13 +250,35 @@ export async function compareBookVersion(
       .from('books')
       .update({
         total_changes: (currentBook?.total_changes || 0) + result.totalChanges,
-        last_check_date: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        last_check_date: comparisonDate,
+        updated_at: comparisonDate,
       })
       .eq('id', bookId);
 
     if (bookUpdateError) {
       console.error('Error updating book:', bookUpdateError);
+    }
+
+    // Register this comparison in history
+    const chaptersAffected = result.chapters.map(ch => ({
+      chapterId: ch.chapterId,
+      chapterNumber: ch.chapterNumber,
+      changesInChapter: ch.changesInChapter
+    }));
+
+    const { error: comparisonError } = await supabase
+      .from('book_comparisons')
+      .insert({
+        book_id: bookId,
+        comparison_date: comparisonDate,
+        comparison_type: 'version_check',
+        total_changes: result.totalChanges,
+        changed_paragraphs: result.changedParagraphs,
+        chapters_affected: chaptersAffected,
+      });
+
+    if (comparisonError) {
+      console.error('Error registering comparison:', comparisonError);
     }
 
     return result;
@@ -317,6 +341,23 @@ export async function importBook(bookData: EGWBook): Promise<string> {
         .insert(paragraphsToInsert);
 
       if (parasError) throw parasError;
+    }
+
+    // Register initial import in history
+    const { error: comparisonError } = await supabase
+      .from('book_comparisons')
+      .insert({
+        book_id: book.id,
+        comparison_date: book.imported_at,
+        comparison_type: 'initial_import',
+        total_changes: 0,
+        changed_paragraphs: 0,
+        chapters_affected: [],
+        version_notes: `Importación inicial: ${bookData.chapters.length} capítulos`,
+      });
+
+    if (comparisonError) {
+      console.error('Error registering initial import:', comparisonError);
     }
 
     return book.id;

@@ -6,6 +6,7 @@ import { compareBookVersion, importBook, deleteBook } from "@/lib/compareUtils";
 import { Book } from "@/types/database";
 import { useAdminCheck } from "@/hooks/useAdminCheck";
 import Navbar from "@/components/Navbar";
+import BookVersionHistory from "@/components/BookVersionHistory";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -557,6 +558,11 @@ const Admin = () => {
               ))}
             </div>
           )}
+        </div>
+
+        {/* Version History Section */}
+        <div className="mt-12">
+          <BookVersionHistory books={books} />
         </div>
       </main>
     </div>

@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      book_comparisons: {
+        Row: {
+          book_id: string
+          changed_paragraphs: number
+          chapters_affected: Json | null
+          comparison_date: string
+          comparison_type: string
+          created_at: string
+          id: string
+          total_changes: number
+          version_notes: string | null
+        }
+        Insert: {
+          book_id: string
+          changed_paragraphs?: number
+          chapters_affected?: Json | null
+          comparison_date?: string
+          comparison_type: string
+          created_at?: string
+          id?: string
+          total_changes?: number
+          version_notes?: string | null
+        }
+        Update: {
+          book_id?: string
+          changed_paragraphs?: number
+          chapters_affected?: Json | null
+          comparison_date?: string
+          comparison_type?: string
+          created_at?: string
+          id?: string
+          total_changes?: number
+          version_notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_comparisons_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       books: {
         Row: {
           book_code_api: string | null
