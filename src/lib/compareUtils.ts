@@ -55,8 +55,45 @@ export function compareParagraphs(
 }
 
 /**
- * Compare a new book version with the stored version in the database
+ * ⭐ NUEVA: Eliminar libro completo de la base de datos
+ */
+export async function deleteBook(bookCode: string): Promise<void> {
+  try {
+    console.log(`Eliminando libro ${bookCode}...`);
+
+    // Buscar el libro por código
+    const { data: book, error: bookError } = await supabase
+      .from('books')
+      .select('id, title')
+      .eq('code', bookCode)
+      .single();
+
+    if (bookError) {
+      if (bookError.code === 'PGRST116') {
+        throw new Error(`El libro ${bookCode} no existe en la base de datos`);
+      }
+      throw bookError;
+    }
+
+    // Eliminar el libro (cascade eliminará chapters y paragraphs automáticamente)
+    const { error: deleteError } = await supabase
+      .from('books')
+      .delete()
+      .eq('id', book.id);
+
+    if (deleteError) throw deleteError;
+
+    console.log(`✅ Libro ${bookCode} (${book.title}) eliminado correctamente`);
+  } catch (error) {
+    console.error('Error eliminando libro:', error);
+    throw error;
+  }
+}
+
+/**
+ * ⭐ CORREGIDA: Compare a new book version with the stored version in the database
  * Updates the database with detected changes
+ * AHORA COMPARA POR REFCODE en lugar de por paragraph_number
  */
 export async function compareBookVersion(
   bookId: string,
@@ -83,35 +120,42 @@ export async function compareBookVersion(
     for (const newChapter of newBookData.chapters) {
       const existingChapter = chapters?.find(c => c.number === newChapter.number);
       
-      if (!existingChapter) continue;
+      if (!existingChapter) {
+        console.warn(`⚠️ Capítulo ${newChapter.number} no existe en BD, omitiendo comparación`);
+        continue;
+      }
 
       let changesInChapter = 0;
 
       // Fetch paragraphs for this chapter
       const { data: paragraphs, error: parasError } = await supabase
         .from('paragraphs')
-        .select('id, paragraph_number, base_text, latest_text, change_history')
+        .select('id, paragraph_number, refcode_short, base_text, latest_text, change_history')
         .eq('chapter_id', existingChapter.id)
         .order('paragraph_number');
 
       if (parasError) throw parasError;
 
-      // Compare each paragraph
-      for (let pIndex = 0; pIndex < newChapter.paragraphs.length; pIndex++) {
-        const newParagraph = newChapter.paragraphs[pIndex];
-        const paragraphNumber = pIndex + 1;
-        
+      // ⭐ CAMBIO CRÍTICO: Comparar por refcode_short en lugar de paragraph_number
+      for (const newParagraph of newChapter.paragraphs) {
+        if (!newParagraph.refcode_short) {
+          console.warn(`⚠️ Párrafo sin refcode en capítulo ${newChapter.number}, omitiendo`);
+          continue;
+        }
+
         const existingParagraph = paragraphs?.find(
-          p => p.paragraph_number === paragraphNumber
+          p => p.refcode_short === newParagraph.refcode_short
         );
 
-        // Handle newly added paragraphs
+        // Handle newly added paragraphs (refcode nuevo)
         if (!existingParagraph) {
+          console.log(`📝 Nuevo párrafo detectado: ${newParagraph.refcode_short}`);
+          
           const { error: insertError } = await supabase
             .from('paragraphs')
             .insert({
               chapter_id: existingChapter.id,
-              paragraph_number: paragraphNumber,
+              paragraph_number: newChapter.paragraphs.indexOf(newParagraph) + 1,
               base_text: newParagraph.content,
               latest_text: newParagraph.content,
               refcode_short: newParagraph.refcode_short,
@@ -134,6 +178,8 @@ export async function compareBookVersion(
           changesInChapter++;
           result.totalChanges++;
           result.changedParagraphs++;
+
+          console.log(`🔄 Cambio detectado en ${newParagraph.refcode_short}`);
 
           // Update the paragraph with new change history
           const changeHistory = Array.isArray(existingParagraph.change_history)
@@ -192,7 +238,6 @@ export async function compareBookVersion(
     }
 
     // Update book total changes and last check date (accumulate, don't replace)
-    // Fetch current book data to get existing count
     const { data: currentBook } = await supabase
       .from('books')
       .select('total_changes')
