@@ -29,7 +29,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Calendar, FileText, TrendingUp, Filter, Download, RefreshCw, AlertCircle } from "lucide-react";
+import { Calendar, FileText, TrendingUp, Filter, Download, RefreshCw, AlertCircle, Pencil } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
@@ -64,6 +67,9 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
   const [searchNotes, setSearchNotes] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [needsSync, setNeedsSync] = useState(false);
+  const [editingNote, setEditingNote] = useState<string | null>(null);
+  const [editNoteText, setEditNoteText] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -232,8 +238,54 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
     }
   };
 
+  const handleEditNote = (comparisonId: string, currentNote: string | null) => {
+    setEditingNote(comparisonId);
+    setEditNoteText(currentNote || "");
+  };
+
+  const handleSaveNote = async () => {
+    if (!editingNote) return;
+    
+    setSavingNote(true);
+    try {
+      const { error } = await supabase
+        .from('book_comparisons')
+        .update({ version_notes: editNoteText })
+        .eq('id', editingNote);
+
+      if (error) throw error;
+
+      toast({
+        title: "✅ Nota actualizada",
+        description: "La nota se guardó correctamente",
+      });
+
+      // Actualizar el estado local
+      setComparisons(prevComparisons =>
+        prevComparisons.map(comp =>
+          comp.id === editingNote
+            ? { ...comp, version_notes: editNoteText }
+            : comp
+        )
+      );
+
+      setEditingNote(null);
+      setEditNoteText("");
+    } catch (error) {
+      console.error("Error guardando nota:", error);
+      toast({
+        title: "❌ Error",
+        description: "No se pudo guardar la nota",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
   return (
-    <Card>
+    <TooltipProvider>
+      <Card>
       <CardHeader>
         <div className="flex items-start justify-between">
           <div>
@@ -413,22 +465,26 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
                   const isBaseline = comp.comparison_type === 'initial_import';
 
                   return (
-                    <TableRow key={comp.id}>
-                      <TableCell className="font-mono text-sm">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-muted-foreground" />
-                          {format(new Date(comp.comparison_date), 'dd/MM/yyyy HH:mm', { locale: es })}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-muted-foreground" />
-                          <div>
-                            <div className="font-medium">{book?.code}</div>
-                            <div className="text-sm text-muted-foreground">{book?.title}</div>
-                          </div>
-                        </div>
-                      </TableCell>
+                     <TableRow key={comp.id} className="group">
+                       <TableCell className="font-mono text-sm">
+                         <div className="flex items-center gap-2">
+                           <Calendar className="h-4 w-4 text-muted-foreground" />
+                           {format(new Date(comp.comparison_date), 'dd/MM/yy HH:mm', { locale: es })}
+                         </div>
+                       </TableCell>
+                       <TableCell>
+                         <Tooltip>
+                           <TooltipTrigger asChild>
+                             <div className="flex items-center gap-2 cursor-help">
+                               <FileText className="h-4 w-4 text-muted-foreground" />
+                               <span className="font-medium">{book?.code}</span>
+                             </div>
+                           </TooltipTrigger>
+                           <TooltipContent side="right" className="max-w-xs">
+                             <p className="text-sm">{book?.title}</p>
+                           </TooltipContent>
+                         </Tooltip>
+                       </TableCell>
                       <TableCell>
                         <Badge variant={isBaseline ? "default" : "secondary"}>
                           {isBaseline ? "Base" : "Revisión"}
@@ -462,11 +518,21 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="max-w-xs">
-                        <p className="text-sm text-muted-foreground truncate">
-                          {comp.version_notes || "-"}
-                        </p>
-                      </TableCell>
+                       <TableCell className="max-w-xs">
+                         <div className="flex items-center gap-2">
+                           <p className="text-sm text-muted-foreground truncate flex-1">
+                             {comp.version_notes || "-"}
+                           </p>
+                           <Button
+                             variant="ghost"
+                             size="icon"
+                             className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                             onClick={() => handleEditNote(comp.id, comp.version_notes)}
+                           >
+                             <Pencil className="h-3.5 w-3.5" />
+                           </Button>
+                         </div>
+                       </TableCell>
                     </TableRow>
                   );
                 })
@@ -486,7 +552,7 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
                 />
               </PaginationItem>
               
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              {totalPages > 0 && Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                 let pageNum;
                 if (totalPages <= 5) {
                   pageNum = i + 1;
@@ -521,7 +587,35 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
           </Pagination>
         )}
       </CardContent>
+
+      {/* Edit Note Dialog */}
+      <Dialog open={!!editingNote} onOpenChange={(open) => !open && setEditingNote(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Nota de Versión</DialogTitle>
+            <DialogDescription>
+              Modifica las notas o comentarios sobre esta comparación de versión.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={editNoteText}
+            onChange={(e) => setEditNoteText(e.target.value)}
+            placeholder="Escribe notas sobre esta versión..."
+            rows={4}
+            className="resize-none"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingNote(null)} disabled={savingNote}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveNote} disabled={savingNote}>
+              {savingNote ? "Guardando..." : "Guardar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
+    </TooltipProvider>
   );
 };
 
