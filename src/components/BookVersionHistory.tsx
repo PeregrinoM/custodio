@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Book } from "@/types/database";
+import { syncHistoricalData } from "@/lib/compareUtils";
 import {
   Table,
   TableBody,
@@ -28,9 +29,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Calendar, FileText, TrendingUp, Filter, Download } from "lucide-react";
+import { Calendar, FileText, TrendingUp, Filter, Download, RefreshCw, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface BookComparison {
   id: string;
@@ -59,10 +62,17 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [searchNotes, setSearchNotes] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [needsSync, setNeedsSync] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     loadComparisons();
   }, [selectedBook, selectedType, dateFrom, dateTo]);
+
+  useEffect(() => {
+    checkIfNeedsSync();
+  }, [comparisons, books]);
 
   const loadComparisons = async () => {
     setLoading(true);
@@ -133,8 +143,23 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
     return books.find(b => b.id === bookId);
   };
 
+  const checkIfNeedsSync = () => {
+    // Verificar si hay libros sin registros de importación inicial
+    const booksWithoutHistory = books.filter(book => {
+      return !comparisons.some(comp => 
+        comp.book_id === book.id && comp.comparison_type === 'initial_import'
+      );
+    });
+    setNeedsSync(booksWithoutHistory.length > 0);
+  };
+
   const getTotalChangesSum = () => {
     return filteredComparisons.reduce((sum, comp) => sum + comp.total_changes, 0);
+  };
+
+  const getTotalChangesFromBooks = () => {
+    // Si hay libros con cambios pero sin comparisons, mostrar la suma desde books
+    return books.reduce((sum, book) => sum + (book.total_changes || 0), 0);
   };
 
   const getBaselineComparison = (bookId: string) => {
@@ -174,6 +199,39 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
     setSearchNotes("");
   };
 
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const result = await syncHistoricalData();
+      
+      if (result.errors.length > 0) {
+        toast({
+          title: "⚠️ Sincronización con errores",
+          description: `${result.synced} libros sincronizados, ${result.errors.length} errores`,
+          variant: "destructive",
+        });
+        console.error("Errores de sincronización:", result.errors);
+      } else {
+        toast({
+          title: "✅ Sincronización completada",
+          description: `${result.synced} libros sincronizados correctamente`,
+        });
+      }
+      
+      // Recargar comparisons
+      await loadComparisons();
+    } catch (error) {
+      console.error("Error en sincronización:", error);
+      toast({
+        title: "❌ Error",
+        description: "No se pudo completar la sincronización",
+        variant: "destructive",
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -187,25 +245,59 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
               Registro completo de importaciones y comparaciones de libros
             </CardDescription>
           </div>
-          <Button variant="outline" size="sm" onClick={exportToCSV}>
-            <Download className="h-4 w-4 mr-2" />
-            Exportar CSV
-          </Button>
+          <div className="flex gap-2">
+            {needsSync && (
+              <Button variant="default" size="sm" onClick={handleSync} disabled={syncing}>
+                {syncing ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Sincronizando...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Sincronizar Historial
+                  </>
+                )}
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={exportToCSV}>
+              <Download className="h-4 w-4 mr-2" />
+              Exportar CSV
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Alert if sync needed */}
+        {needsSync && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Sincronización necesaria</AlertTitle>
+            <AlertDescription>
+              Se detectaron {books.filter(book => !comparisons.some(comp => comp.book_id === book.id && comp.comparison_type === 'initial_import')).length} libros sin historial de versiones. 
+              Esto ocurre cuando los libros fueron importados antes de implementar el sistema de historial.
+              Haz clic en "Sincronizar Historial" para crear los registros faltantes.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Statistics Summary */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card className="bg-muted/50">
             <CardContent className="pt-6">
               <div className="text-2xl font-bold text-primary">{filteredComparisons.length}</div>
-              <p className="text-sm text-muted-foreground">Registros totales</p>
+              <p className="text-sm text-muted-foreground">Registros de historial</p>
             </CardContent>
           </Card>
           <Card className="bg-muted/50">
             <CardContent className="pt-6">
-              <div className="text-2xl font-bold text-destructive">{getTotalChangesSum()}</div>
-              <p className="text-sm text-muted-foreground">Cambios detectados</p>
+              <div className="text-2xl font-bold text-destructive">
+                {needsSync ? getTotalChangesFromBooks() : getTotalChangesSum()}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Cambios detectados {needsSync && "(desde libros)"}
+              </p>
             </CardContent>
           </Card>
           <Card className="bg-muted/50">

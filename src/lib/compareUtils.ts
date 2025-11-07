@@ -289,6 +289,106 @@ export async function compareBookVersion(
 }
 
 /**
+ * ⭐ NUEVA: Sincronizar datos históricos para libros sin registros en book_comparisons
+ * Crea registros retroactivos basados en los datos actuales de la tabla books
+ */
+export async function syncHistoricalData(): Promise<{
+  synced: number;
+  errors: string[];
+}> {
+  const result = {
+    synced: 0,
+    errors: [] as string[],
+  };
+
+  try {
+    console.log('🔄 Iniciando sincronización de datos históricos...');
+
+    // Obtener todos los libros
+    const { data: books, error: booksError } = await supabase
+      .from('books')
+      .select('id, code, title, total_changes, imported_at, created_at');
+
+    if (booksError) throw booksError;
+
+    if (!books || books.length === 0) {
+      console.log('⚠️ No hay libros para sincronizar');
+      return result;
+    }
+
+    // Para cada libro, verificar si tiene registro initial_import
+    for (const book of books) {
+      try {
+        // Verificar si ya existe un registro de importación inicial
+        const { data: existingComparison, error: checkError } = await supabase
+          .from('book_comparisons')
+          .select('id')
+          .eq('book_id', book.id)
+          .eq('comparison_type', 'initial_import')
+          .maybeSingle();
+
+        if (checkError) throw checkError;
+
+        // Si no existe, crear el registro de importación inicial
+        if (!existingComparison) {
+          const importDate = book.imported_at || book.created_at || new Date().toISOString();
+
+          const { error: insertError } = await supabase
+            .from('book_comparisons')
+            .insert({
+              book_id: book.id,
+              comparison_date: importDate,
+              comparison_type: 'initial_import',
+              total_changes: 0,
+              changed_paragraphs: 0,
+              chapters_affected: [],
+              version_notes: `Registro retroactivo de importación inicial - ${book.title}`,
+            });
+
+          if (insertError) throw insertError;
+
+          console.log(`✅ Registro de importación creado para: ${book.code}`);
+
+          // Si el libro tiene cambios acumulados, crear un registro version_check
+          if (book.total_changes && book.total_changes > 0) {
+            const { error: versionError } = await supabase
+              .from('book_comparisons')
+              .insert({
+                book_id: book.id,
+                comparison_date: new Date().toISOString(),
+                comparison_type: 'version_check',
+                total_changes: book.total_changes,
+                changed_paragraphs: 0, // No tenemos este dato histórico
+                chapters_affected: [],
+                version_notes: `Cambios acumulados sincronizados desde tabla books (${book.total_changes} cambios)`,
+              });
+
+            if (versionError) throw versionError;
+
+            console.log(`✅ Registro de cambios acumulados creado para: ${book.code} (${book.total_changes} cambios)`);
+          }
+
+          result.synced++;
+        } else {
+          console.log(`ℹ️ ${book.code} ya tiene registro de importación`);
+        }
+      } catch (error) {
+        const errorMsg = `Error sincronizando ${book.code}: ${error instanceof Error ? error.message : 'Desconocido'}`;
+        console.error(errorMsg);
+        result.errors.push(errorMsg);
+      }
+    }
+
+    console.log(`✅ Sincronización completada: ${result.synced} libros sincronizados`);
+    return result;
+  } catch (error) {
+    console.error('Error en sincronización:', error);
+    result.errors.push(`Error general: ${error instanceof Error ? error.message : 'Desconocido'}`);
+    return result;
+  }
+}
+
+/**
  * Import a new book from EGW API into the database
  */
 export async function importBook(bookData: EGWBook): Promise<string> {
