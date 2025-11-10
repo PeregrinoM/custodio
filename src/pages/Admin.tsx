@@ -7,6 +7,7 @@ import { Book } from "@/types/database";
 import { useAdminCheck } from "@/hooks/useAdminCheck";
 import Navbar from "@/components/Navbar";
 import BookVersionHistory from "@/components/BookVersionHistory";
+import { DeleteBookDialog } from "@/components/DeleteBookDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +27,8 @@ const Admin = () => {
   const [loading, setLoading] = useState(true);
   const [comparing, setComparing] = useState<string | null>(null);
   const [deletingBook, setDeletingBook] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [bookToDelete, setBookToDelete] = useState<{ code: string; title: string } | null>(null);
   const [newBookCode, setNewBookCode] = useState("");
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
@@ -100,36 +103,42 @@ const Admin = () => {
     }
   };
 
-  const handleDeleteBook = async (bookCode: string, bookTitle: string) => {
-    const confirmed = window.confirm(
-      `⚠️ ¿Estás seguro de eliminar "${bookTitle}" (${bookCode})?\n\n` +
-      `Esta acción eliminará:\n` +
-      `• El libro completo\n` +
-      `• Todos sus capítulos\n` +
-      `• Todos sus párrafos\n` +
-      `• Todo el historial de cambios\n\n` +
-      `⛔ ESTA ACCIÓN NO SE PUEDE DESHACER`
-    );
+  const handleDeleteBook = (bookCode: string, bookTitle: string) => {
+    console.log('🔴 [DELETE] Abriendo diálogo para:', bookCode, bookTitle);
+    setBookToDelete({ code: bookCode, title: bookTitle });
+    setDeleteDialogOpen(true);
+  };
 
-    if (!confirmed) return;
+  const confirmDeleteBook = async () => {
+    if (!bookToDelete) return;
 
-    setDeletingBook(bookCode);
+    const { code, title } = bookToDelete;
+    console.log('🔴 [DELETE] Usuario confirmó eliminación de:', code);
+
+    setDeletingBook(code);
 
     try {
-      await deleteBook(bookCode);
+      console.log('🔴 [DELETE] Llamando deleteBook...');
+      await deleteBook(code);
 
       toast({
         title: "✅ Libro eliminado",
-        description: `${bookTitle} (${bookCode}) fue eliminado correctamente`,
+        description: `${title} (${code}) fue eliminado correctamente`,
+        duration: 5000,
       });
 
+      console.log('🔴 [DELETE] Recargando lista de libros...');
       await loadBooks();
+      
+      setDeleteDialogOpen(false);
+      setBookToDelete(null);
     } catch (error) {
-      console.error("Error deleting book:", error);
+      console.error('🔴 [DELETE] Error en handleDeleteBook:', error);
       toast({
         title: "❌ Error al eliminar",
-        description: error instanceof Error ? error.message : "Error desconocido",
+        description: error instanceof Error ? error.message : "Error desconocido al eliminar el libro",
         variant: "destructive",
+        duration: 10000,
       });
     } finally {
       setDeletingBook(null);
@@ -565,6 +574,16 @@ const Admin = () => {
           <BookVersionHistory books={books} />
         </div>
       </main>
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteBookDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        bookTitle={bookToDelete?.title || ""}
+        bookCode={bookToDelete?.code || ""}
+        onConfirm={confirmDeleteBook}
+        isDeleting={!!deletingBook}
+      />
     </div>
   );
 };

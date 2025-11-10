@@ -59,7 +59,7 @@ export function compareParagraphs(
  */
 export async function deleteBook(bookCode: string): Promise<void> {
   try {
-    console.log(`Eliminando libro ${bookCode}...`);
+    console.log('🔴 [DELETE] Iniciando eliminación de:', bookCode);
 
     // Buscar el libro por código
     const { data: book, error: bookError } = await supabase
@@ -68,12 +68,27 @@ export async function deleteBook(bookCode: string): Promise<void> {
       .eq('code', bookCode)
       .single();
 
+    console.log('🔴 [DELETE] Resultado de búsqueda:', { book, error: bookError });
+
     if (bookError) {
       if (bookError.code === 'PGRST116') {
+        console.error('🔴 [DELETE] Libro no encontrado en BD');
         throw new Error(`El libro ${bookCode} no existe en la base de datos`);
       }
+      console.error('🔴 [DELETE] Error buscando libro:', bookError);
       throw bookError;
     }
+
+    if (!book) {
+      console.error('🔴 [DELETE] No se encontró el libro');
+      throw new Error(`El libro ${bookCode} no existe`);
+    }
+
+    console.log('🔴 [DELETE] Libro encontrado, procediendo a eliminar:', {
+      id: book.id,
+      title: book.title,
+      code: bookCode
+    });
 
     // Eliminar el libro (cascade eliminará chapters y paragraphs automáticamente)
     const { error: deleteError } = await supabase
@@ -81,11 +96,16 @@ export async function deleteBook(bookCode: string): Promise<void> {
       .delete()
       .eq('id', book.id);
 
-    if (deleteError) throw deleteError;
+    console.log('🔴 [DELETE] Resultado de eliminación:', { error: deleteError });
 
-    console.log(`✅ Libro ${bookCode} (${book.title}) eliminado correctamente`);
+    if (deleteError) {
+      console.error('🔴 [DELETE] Error al eliminar:', deleteError);
+      throw new Error(`Error al eliminar: ${deleteError.message}`);
+    }
+
+    console.log(`✅ [DELETE] Libro ${bookCode} (${book.title}) eliminado correctamente`);
   } catch (error) {
-    console.error('Error eliminando libro:', error);
+    console.error('🔴 [DELETE] Error general:', error);
     throw error;
   }
 }
