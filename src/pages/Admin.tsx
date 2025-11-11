@@ -8,6 +8,7 @@ import { useAdminCheck } from "@/hooks/useAdminCheck";
 import Navbar from "@/components/Navbar";
 import BookVersionHistory from "@/components/BookVersionHistory";
 import { DeleteBookDialog } from "@/components/DeleteBookDialog";
+import { ProgressTracker } from "@/components/ProgressTracker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +20,15 @@ interface ImportProgress {
   current: number;
   total: number;
   chapterName: string;
+  startTime: number;
+}
+
+interface CompareProgress {
+  status: string;
+  current: number;
+  total: number;
+  startTime: number;
+  bookTitle: string;
 }
 
 const Admin = () => {
@@ -26,6 +36,7 @@ const Admin = () => {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [comparing, setComparing] = useState<string | null>(null);
+  const [compareProgress, setCompareProgress] = useState<CompareProgress | null>(null);
   const [deletingBook, setDeletingBook] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [bookToDelete, setBookToDelete] = useState<{ code: string; title: string } | null>(null);
@@ -76,15 +87,34 @@ const Admin = () => {
 
   const handleCompareBook = async (book: Book) => {
     setComparing(book.id);
+    
     try {
       toast({
         title: "Comparando...",
         description: `Obteniendo nueva versión de ${book.title}`,
       });
 
+      // Initialize progress
+      setCompareProgress({
+        status: 'Obteniendo nueva versión del libro...',
+        current: 0,
+        total: 0,
+        startTime: Date.now(),
+        bookTitle: book.title
+      });
+
       const newBookData = await fetchBook(book.code);
+      
+      // Update progress with total chapters
+      setCompareProgress(prev => prev ? {
+        ...prev,
+        status: 'Comparando capítulos...',
+        total: newBookData.chapters.length
+      } : null);
+
       const result = await compareBookVersion(book.id, newBookData);
 
+      setCompareProgress(null);
       toast({
         title: "Comparación completada",
         description: `Se detectaron ${result.totalChanges} cambio(s) en ${result.changedParagraphs} párrafo(s)`,
@@ -93,6 +123,7 @@ const Admin = () => {
       await loadBooks();
     } catch (error) {
       console.error("Error comparing book:", error);
+      setCompareProgress(null);
       toast({
         title: "Error",
         description: "No se pudo completar la comparación",
@@ -180,30 +211,29 @@ const Admin = () => {
 
     setImporting(true);
     setImportProgress({
-      status: 'Iniciando scraping...',
+      status: 'Iniciando importación...',
       current: 0,
       total: 0,
-      chapterName: ''
+      chapterName: '',
+      startTime: Date.now()
     });
 
     try {
       const bookInfo = getBookInfo(trimmedCode);
       
-      setImportProgress({
+      setImportProgress(prev => prev ? {
+        ...prev,
         status: `Extrayendo ${bookInfo?.title}...`,
-        current: 0,
-        total: 0,
-        chapterName: ''
-      });
+      } : null);
 
       const bookData = await fetchBook(trimmedCode);
       
-      setImportProgress({
+      setImportProgress(prev => prev ? {
+        ...prev,
         status: 'Guardando en base de datos...',
-        current: 0,
         total: bookData.chapters.length,
-        chapterName: ''
-      });
+        chapterName: bookData.chapters[0]?.title || ''
+      } : null);
 
       await importBook(bookData);
       
@@ -448,27 +478,15 @@ const Admin = () => {
 
             {/* Import Progress Indicator */}
             {importProgress && (
-              <Card className="p-4 bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800">
-                <div className="flex items-center gap-3">
-                  <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full" />
-                  <div className="flex-1">
-                    <p className="font-medium text-blue-900 dark:text-blue-100">{importProgress.status}</p>
-                    {importProgress.total > 0 && (
-                      <div className="mt-2">
-                        <div className="w-full bg-blue-200 dark:bg-blue-900 rounded-full h-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
-                          />
-                        </div>
-                        <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                          {importProgress.current} / {importProgress.total} capítulos
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </Card>
+              <ProgressTracker
+                title="Importando libro"
+                status={importProgress.status}
+                current={importProgress.current}
+                total={importProgress.total}
+                startTime={importProgress.startTime}
+                itemName="capítulo"
+                itemLabel={importProgress.chapterName}
+              />
             )}
 
             {/* Error Display */}
@@ -491,6 +509,18 @@ const Admin = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Compare Progress Indicator */}
+        {compareProgress && (
+          <ProgressTracker
+            title={`Revisando cambios: ${compareProgress.bookTitle}`}
+            status={compareProgress.status}
+            current={compareProgress.current}
+            total={compareProgress.total}
+            startTime={compareProgress.startTime}
+            itemName="capítulo"
+          />
+        )}
 
         {/* Books List */}
         <div className="space-y-4">
