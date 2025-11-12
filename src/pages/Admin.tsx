@@ -12,6 +12,7 @@ import { ProgressTracker } from "@/components/ProgressTracker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, BookPlus, RefreshCw, LogOut, AlertTriangle, Copy, Trash2 } from "lucide-react";
 
@@ -46,6 +47,8 @@ const Admin = () => {
   const [scrapingErrors, setScrapingErrors] = useState<string[]>([]);
   const [debugHtml, setDebugHtml] = useState<any>(null);
   const [isDebugging, setIsDebugging] = useState(false);
+  const [debugBookId, setDebugBookId] = useState<string>('174');
+  const [debugBookCode, setDebugBookCode] = useState<string>('');
   const { isAdmin, loading: adminCheckLoading } = useAdminCheck();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -285,9 +288,21 @@ const Admin = () => {
     setIsDebugging(true);
     setDebugHtml(null);
     
+    const bookIdToTest = parseInt(debugBookId);
+    
+    if (isNaN(bookIdToTest)) {
+      toast({
+        title: '❌ ID inválido',
+        description: 'Por favor ingresa un ID numérico válido',
+        variant: 'destructive'
+      });
+      setIsDebugging(false);
+      return;
+    }
+    
     try {
       const { data, error } = await supabase.functions.invoke('debug-toc', {
-        body: { bookId: 174 }
+        body: { bookId: bookIdToTest }
       });
 
       if (error) throw error;
@@ -296,7 +311,7 @@ const Admin = () => {
       
       toast({
         title: '✅ Debug completado',
-        description: `HTML obtenido: ${data.htmlLength} caracteres`
+        description: `HTML obtenido para ID ${bookIdToTest}: ${data.htmlLength} caracteres`
       });
       
     } catch (error) {
@@ -387,16 +402,57 @@ const Admin = () => {
         <Card className="mb-8 p-6 bg-yellow-50 dark:bg-yellow-950/20 border-yellow-300 dark:border-yellow-800">
           <h2 className="text-xl font-bold mb-4">🔧 Debug: Inspeccionar HTML del TOC</h2>
           <p className="text-sm text-muted-foreground mb-4">
-            Esta función obtiene el HTML crudo del índice de capítulos para identificar la estructura correcta.
+            Herramienta para validar que un libro se puede importar correctamente antes de intentarlo.
           </p>
           
-          <Button 
-            onClick={handleDebugToc} 
-            disabled={isDebugging}
-            variant="outline"
-          >
-            {isDebugging ? 'Obteniendo HTML...' : '🔍 Obtener HTML del TOC (Libro 174)'}
-          </Button>
+          <div className="flex gap-3 mb-4">
+            {/* Dropdown with available books */}
+            <Select value={debugBookCode} onValueChange={(code) => {
+              setDebugBookCode(code);
+              const bookInfo = getBookInfo(code);
+              if (bookInfo) {
+                setDebugBookId(bookInfo.id.toString());
+              }
+            }}>
+              <SelectTrigger className="w-[280px]">
+                <SelectValue placeholder="Seleccionar libro..." />
+              </SelectTrigger>
+              <SelectContent>
+                {getAvailableBookCodes().map(code => {
+                  const info = getBookInfo(code);
+                  return (
+                    <SelectItem key={code} value={code}>
+                      {code} - {info?.title}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+            
+            {/* Manual book ID input */}
+            <Input
+              type="number"
+              placeholder="ID del libro (ej: 217)"
+              value={debugBookId}
+              onChange={(e) => setDebugBookId(e.target.value)}
+              className="w-[180px]"
+            />
+            
+            <Button 
+              onClick={handleDebugToc} 
+              disabled={isDebugging || !debugBookId}
+              variant="outline"
+            >
+              {isDebugging ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Probando...
+                </>
+              ) : (
+                '🔍 Probar TOC'
+              )}
+            </Button>
+          </div>
           
           {debugHtml && (
             <div className="mt-4 space-y-4">
@@ -452,7 +508,13 @@ const Admin = () => {
               Agregar nuevo libro
             </CardTitle>
             <CardDescription>
-              Ingresa el código de un libro de EGW Writings para comenzar a monitorearlo. Códigos disponibles: {getAvailableBookCodes().join(', ')}
+              Ingresa el código de un libro de EGW Writings para comenzar a monitorearlo.
+              <br />
+              <span className="text-amber-600 dark:text-amber-400 font-medium mt-2 inline-block">
+                💡 Tip: Usa la herramienta de Debug arriba para validar que el libro se puede importar correctamente.
+              </span>
+              <br />
+              Códigos disponibles: {getAvailableBookCodes().join(', ')}
             </CardDescription>
           </CardHeader>
           <CardContent>

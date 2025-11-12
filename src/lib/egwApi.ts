@@ -18,14 +18,25 @@ export interface EGWBook {
 }
 
 // Mapeo de códigos a IDs de libros en egwwritings.org
+// ✅ IDs Verificados:
+// - DTG/DA: 174 (verificado)
+// - PP: 1704 (verificado) 
+// - PR/PK: 217 (corregido desde 88, verificado en https://m.egwwritings.org/es/book/217.36/toc)
+// 
+// ⚠️ Pendientes de verificación:
+// - CS/GC: 132
+// - HAp/AA: 127
+// - MC/MH: 133
+// - CC/SC: 130
+// - Ed: 129
 const BOOK_ID_MAP: Record<string, { id: number, title: string }> = {
   'DTG': { id: 174, title: 'El Deseado de Todas las Gentes' },
   'DA': { id: 174, title: 'El Deseado de Todas las Gentes' }, // Alias en inglés
   'PP': { id: 1704, title: 'Patriarcas y Profetas' },
   'CS': { id: 132, title: 'El Conflicto de los Siglos' },
   'GC': { id: 132, title: 'El Conflicto de los Siglos' }, // Alias en inglés
-  'PR': { id: 88, title: 'Profetas y Reyes' },
-  'PK': { id: 88, title: 'Profetas y Reyes' }, // Alias en inglés
+  'PR': { id: 217, title: 'Profetas y Reyes' },
+  'PK': { id: 217, title: 'Profetas y Reyes' }, // Alias en inglés
   'HAp': { id: 127, title: 'Los Hechos de los Apóstoles' },
   'AA': { id: 127, title: 'Los Hechos de los Apóstoles' }, // Alias en inglés
   'MC': { id: 133, title: 'El Ministerio de Curación' },
