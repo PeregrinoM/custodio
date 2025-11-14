@@ -9,12 +9,13 @@ import Navbar from "@/components/Navbar";
 import BookVersionHistory from "@/components/BookVersionHistory";
 import { DeleteBookDialog } from "@/components/DeleteBookDialog";
 import { ProgressTracker } from "@/components/ProgressTracker";
+import { BookCatalogManager } from "@/components/BookCatalogManager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, BookPlus, RefreshCw, LogOut, AlertTriangle, Copy, Trash2 } from "lucide-react";
+import { Loader2, BookPlus, RefreshCw, LogOut, AlertTriangle, Copy, Trash2, Settings } from "lucide-react";
 
 interface ImportProgress {
   status: string;
@@ -49,6 +50,7 @@ const Admin = () => {
   const [isDebugging, setIsDebugging] = useState(false);
   const [debugBookId, setDebugBookId] = useState<string>('174');
   const [debugBookCode, setDebugBookCode] = useState<string>('');
+  const [availableBookCodes, setAvailableBookCodes] = useState<string[]>([]);
   const { isAdmin, loading: adminCheckLoading } = useAdminCheck();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -56,7 +58,17 @@ const Admin = () => {
   useEffect(() => {
     checkAuth();
     loadBooks();
+    loadAvailableBookCodes();
   }, []);
+
+  const loadAvailableBookCodes = async () => {
+    try {
+      const codes = await getAvailableBookCodes();
+      setAvailableBookCodes(codes);
+    } catch (error) {
+      console.error("Error loading book codes:", error);
+    }
+  };
 
   const checkAuth = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -193,10 +205,11 @@ const Admin = () => {
     }
 
     // Validate with available book codes
-    if (!isValidBookCode(trimmedCode)) {
+    const isValid = await isValidBookCode(trimmedCode);
+    if (!isValid) {
       toast({
         title: "Código inválido",
-        description: `Códigos válidos: ${getAvailableBookCodes().join(', ')}`,
+        description: `Códigos válidos: ${availableBookCodes.join(', ')}`,
         variant: "destructive",
       });
       return;
@@ -222,7 +235,7 @@ const Admin = () => {
     });
 
     try {
-      const bookInfo = getBookInfo(trimmedCode);
+      const bookInfo = await getBookInfo(trimmedCode);
       
       setImportProgress(prev => prev ? {
         ...prev,
@@ -385,17 +398,23 @@ const Admin = () => {
       <main className="container mx-auto px-4 py-12 max-w-6xl">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="font-display text-4xl font-bold text-foreground mb-2">
+            <h1 className="text-4xl font-bold text-foreground mb-2">
               Panel de Administración
             </h1>
             <p className="text-muted-foreground">
               Gestiona los libros monitoreados y realiza comparaciones
             </p>
           </div>
-          <Button onClick={handleLogout} variant="outline">
-            <LogOut className="mr-2 h-4 w-4" />
-            Cerrar sesión
-          </Button>
+          <div className="flex gap-3">
+            <Button onClick={() => navigate("/admin/config")} variant="outline">
+              <Settings className="mr-2 h-4 w-4" />
+              Configuración
+            </Button>
+            <Button onClick={handleLogout} variant="outline">
+              <LogOut className="mr-2 h-4 w-4" />
+              Cerrar sesión
+            </Button>
+          </div>
         </div>
 
         {/* Debug Section */}
@@ -407,9 +426,9 @@ const Admin = () => {
           
           <div className="flex gap-3 mb-4">
             {/* Dropdown with available books */}
-            <Select value={debugBookCode} onValueChange={(code) => {
+            <Select value={debugBookCode} onValueChange={async (code) => {
               setDebugBookCode(code);
-              const bookInfo = getBookInfo(code);
+              const bookInfo = await getBookInfo(code);
               if (bookInfo) {
                 setDebugBookId(bookInfo.id.toString());
               }
@@ -418,11 +437,10 @@ const Admin = () => {
                 <SelectValue placeholder="Seleccionar libro..." />
               </SelectTrigger>
               <SelectContent>
-                {getAvailableBookCodes().map(code => {
-                  const info = getBookInfo(code);
+                {availableBookCodes.map(code => {
                   return (
                     <SelectItem key={code} value={code}>
-                      {code} - {info?.title}
+                      {code}
                     </SelectItem>
                   );
                 })}
@@ -500,6 +518,11 @@ const Admin = () => {
           )}
         </Card>
 
+        {/* Book Catalog Management */}
+        <div className="mb-8">
+          <BookCatalogManager />
+        </div>
+
         {/* Import New Book Section */}
         <Card className="mb-8 border-primary/20 shadow-lg">
           <CardHeader>
@@ -514,7 +537,7 @@ const Admin = () => {
                 💡 Tip: Usa la herramienta de Debug arriba para validar que el libro se puede importar correctamente.
               </span>
               <br />
-              Códigos disponibles: {getAvailableBookCodes().join(', ')}
+              Códigos disponibles: {availableBookCodes.join(', ')}
             </CardDescription>
           </CardHeader>
           <CardContent>
