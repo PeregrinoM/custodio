@@ -17,64 +17,109 @@ export interface EGWBook {
   chapters: EGWChapter[]
 }
 
-// Mapeo de códigos a IDs de libros en egwwritings.org
-// ✅ IDs Verificados:
-// - DTG/DA: 174 (verificado)
-// - PP: 1704 (verificado) 
-// - PR/PK: 217 (corregido desde 88, verificado en https://m.egwwritings.org/es/book/217.36/toc)
-// 
-// ⚠️ Pendientes de verificación:
-// - CS/GC: 132
-// - HAp/AA: 127
-// - MC/MH: 133
-// - CC/SC: 130
-// - Ed: 129
-const BOOK_ID_MAP: Record<string, { id: number, title: string }> = {
-  'DTG': { id: 174, title: 'El Deseado de Todas las Gentes' },
-  'DA': { id: 174, title: 'El Deseado de Todas las Gentes' }, // Alias en inglés
-  'PP': { id: 1704, title: 'Patriarcas y Profetas' },
-  'CS': { id: 132, title: 'El Conflicto de los Siglos' },
-  'GC': { id: 132, title: 'El Conflicto de los Siglos' }, // Alias en inglés
-  'PR': { id: 217, title: 'Profetas y Reyes' },
-  'PK': { id: 217, title: 'Profetas y Reyes' }, // Alias en inglés
-  'HAp': { id: 127, title: 'Los Hechos de los Apóstoles' },
-  'AA': { id: 127, title: 'Los Hechos de los Apóstoles' }, // Alias en inglés
-  'MC': { id: 133, title: 'El Ministerio de Curación' },
-  'MH': { id: 133, title: 'El Ministerio de Curación' }, // Alias en inglés
-  'CC': { id: 130, title: 'El Camino a Cristo' },
-  'SC': { id: 130, title: 'El Camino a Cristo' }, // Alias en inglés
-  'Ed': { id: 129, title: 'La Educación' },
+// Cache for book catalog to avoid repeated DB queries
+let bookCatalogCache: Map<string, { id: number, title: string }> | null = null;
+let cacheTimestamp: number = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Load book catalog from database
+ * Uses caching to minimize DB calls
+ * IMPORTANT: Only loads SPANISH books (is_active = true)
+ */
+async function loadBookCatalog(): Promise<Map<string, { id: number, title: string }>> {
+  // Return cached data if fresh
+  const now = Date.now();
+  if (bookCatalogCache && (now - cacheTimestamp) < CACHE_DURATION) {
+    return bookCatalogCache;
+  }
+
+  console.log('📚 Cargando catálogo de libros desde la base de datos...');
+
+  const { data, error } = await supabase
+    .from('book_catalog' as any)
+    .select('book_code, egw_book_id, title_es')
+    .eq('is_active', true); // Only load active books
+
+  if (error) {
+    console.error('❌ Error cargando catálogo de libros:', error);
+    // Return empty map on error, but keep old cache if available
+    return bookCatalogCache || new Map();
+  }
+
+  const catalog = new Map<string, { id: number, title: string }>();
+  
+  (data as unknown as any[])?.forEach(book => {
+    catalog.set(book.book_code.toUpperCase(), {
+      id: book.egw_book_id,
+      title: book.title_es
+    });
+  });
+
+  // Update cache
+  bookCatalogCache = catalog;
+  cacheTimestamp = now;
+
+  console.log(`✅ Catálogo de libros cargado: ${catalog.size} libros activos`);
+  return catalog;
 }
 
 /**
- * Obtiene un libro mediante scraping usando la Edge Function de Supabase
+ * Get book info by code
+ */
+export async function getBookInfo(code: string): Promise<{ id: number, title: string } | null> {
+  const catalog = await loadBookCatalog();
+  return catalog.get(code.toUpperCase()) || null;
+}
+
+/**
+ * Check if book code is valid
+ */
+export async function isValidBookCode(code: string): Promise<boolean> {
+  const catalog = await loadBookCatalog();
+  return catalog.has(code.toUpperCase());
+}
+
+/**
+ * Get list of available book codes
+ */
+export async function getAvailableBookCodes(): Promise<string[]> {
+  const catalog = await loadBookCatalog();
+  return Array.from(catalog.keys());
+}
+
+/**
+ * Fetch book from EGW API using scraping
+ * IMPORTANT: Only works with Spanish books
  */
 export async function fetchBook(code: string): Promise<EGWBook> {
-  const bookInfo = BOOK_ID_MAP[code.toUpperCase()]
+  const bookInfo = await getBookInfo(code.toUpperCase());
   
   if (!bookInfo) {
+    const availableCodes = await getAvailableBookCodes();
     throw new Error(
       `Código de libro desconocido: ${code}.\n` +
-      `Códigos disponibles: ${Object.keys(BOOK_ID_MAP).join(', ')}`
-    )
+      `Códigos disponibles: ${availableCodes.join(', ')}\n` +
+      `Activa más libros en Admin > Gestión de Catálogo de Libros`
+    );
   }
 
-  console.log(`Iniciando importación de ${bookInfo.title} (${code})...`)
+  console.log(`📖 Iniciando importación de ${bookInfo.title} (${code})...`);
 
   try {
     const { data, error } = await supabase.functions.invoke('scrape-egw-book', {
       body: { bookId: bookInfo.id }
-    })
+    });
 
-    if (error) throw error
+    if (error) throw error;
     
     if (!data.success || !data.chapters) {
-      throw new Error('La respuesta del scraper no contiene capítulos')
+      throw new Error('La respuesta del scraper no contiene capítulos');
     }
 
-    console.log(`Scraping completado: ${data.totalChapters} capítulos obtenidos`)
+    console.log(`✅ Scraping completado: ${data.totalChapters} capítulos obtenidos`);
 
-    // Normalizar al formato EGWBook
+    // Normalize to EGWBook format
     return {
       title: bookInfo.title,
       code: code.toUpperCase(),
@@ -86,33 +131,22 @@ export async function fetchBook(code: string): Promise<EGWBook> {
           refcode_short: p.refcode
         }))
       }))
-    }
+    };
 
   } catch (error) {
-    console.error('Error en fetchBook:', error)
+    console.error('❌ Error en fetchBook:', error);
     throw new Error(
       `Error al importar ${bookInfo.title}: ${error instanceof Error ? error.message : 'Error desconocido'}`
-    )
+    );
   }
 }
 
 /**
- * Lista de códigos de libros disponibles
+ * Force refresh of book catalog cache
+ * Useful after syncing catalog from EGW
  */
-export function getAvailableBookCodes(): string[] {
-  return Object.keys(BOOK_ID_MAP)
-}
-
-/**
- * Valida si un código de libro está disponible
- */
-export function isValidBookCode(code: string): boolean {
-  return code.toUpperCase() in BOOK_ID_MAP
-}
-
-/**
- * Obtiene información de un libro por código
- */
-export function getBookInfo(code: string): { id: number, title: string } | null {
-  return BOOK_ID_MAP[code.toUpperCase()] || null
+export function refreshBookCatalog(): void {
+  bookCatalogCache = null;
+  cacheTimestamp = 0;
+  console.log('🔄 Cache del catálogo de libros limpiado');
 }

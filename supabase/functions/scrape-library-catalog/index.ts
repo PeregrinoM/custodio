@@ -56,12 +56,11 @@ serve(async (req) => {
     const html = await response.text();
 
     // Parse book entries from HTML
-    // Pattern: <a href=\"/es/book/174.0\">El Deseado de Todas las Gentes</a>
-    const bookPattern = /<a href=\"\/[a-z]{2}\/book\/(\d+)\.\d+\"[^>]*>([^<]+)<\/a>/g;
+    // Pattern: <a href="/es/book/174.0">El Deseado de Todas las Gentes</a>
+    const bookPattern = /<a href="\/es\/book\/(\d+)\.\d+"[^>]*>([^<]+)<\/a>/g;
     const books: Array<{
       egw_book_id: number;
       title: string;
-      language: string;
     }> = [];
 
     let match;
@@ -69,18 +68,14 @@ serve(async (req) => {
       const egw_book_id = parseInt(match[1]);
       const title = match[2].trim();
       
-      // Determine language from folder path
-      const language = folderPath.includes('/es/') ? 'es' : 
-                      folderPath.includes('/en/') ? 'en' : 'es';
-
+      // Only Spanish books from /es/ URLs
       books.push({
         egw_book_id,
-        title,
-        language
+        title
       });
     }
 
-    console.log(`[SCRAPE-CATALOG] Found ${books.length} books`);
+    console.log(`[SCRAPE-CATALOG] Found ${books.length} Spanish books`);
 
     // Remove duplicates by egw_book_id (keep first occurrence)
     const uniqueBooks = books.filter((book, index, self) =>
@@ -109,7 +104,7 @@ serve(async (req) => {
             .from("book_catalog")
             .update({
               title_es: book.title,
-              language: book.language,
+              language: 'es',
               folder_id: parseInt(folderId),
               updated_at: new Date().toISOString()
             })
@@ -133,7 +128,7 @@ serve(async (req) => {
               egw_book_id: book.egw_book_id,
               book_code: bookCode || `BK${book.egw_book_id}`,
               title_es: book.title,
-              language: book.language,
+              language: 'es', // Always Spanish
               folder_id: parseInt(folderId),
               is_active: false, // New books are inactive by default
               validation_status: 'pending'
