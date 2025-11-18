@@ -110,7 +110,6 @@ export type Database = {
           created_at: string | null
           id: string
           imported_at: string | null
-          is_test_seed: boolean | null
           language: string | null
           last_check_date: string | null
           title: string
@@ -123,7 +122,6 @@ export type Database = {
           created_at?: string | null
           id?: string
           imported_at?: string | null
-          is_test_seed?: boolean | null
           language?: string | null
           last_check_date?: string | null
           title: string
@@ -136,7 +134,6 @@ export type Database = {
           created_at?: string | null
           id?: string
           imported_at?: string | null
-          is_test_seed?: boolean | null
           language?: string | null
           last_check_date?: string | null
           title?: string

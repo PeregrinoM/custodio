@@ -42,7 +42,7 @@ interface BookComparison {
   id: string;
   book_id: string;
   comparison_date: string;
-  comparison_type: 'initial_import' | 'version_check' | 'test_import';
+  comparison_type: 'initial_import' | 'version_check';
   total_changes: number;
   changed_paragraphs: number;
   chapters_affected: any[];
@@ -398,7 +398,6 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
                   <SelectItem value="all">Todos los tipos</SelectItem>
                   <SelectItem value="initial_import">Importación Inicial</SelectItem>
                   <SelectItem value="version_check">Comparación de Versión</SelectItem>
-                  <SelectItem value="test_import">🧪 Importación de Prueba</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -466,7 +465,7 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
                   const isBaseline = comp.comparison_type === 'initial_import';
 
                   return (
-                      <TableRow key={comp.id} className="group">
+                     <TableRow key={comp.id} className="group">
                        <TableCell className="font-mono text-sm">
                          <div className="flex items-center gap-2">
                            <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -487,15 +486,9 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
                          </Tooltip>
                        </TableCell>
                       <TableCell>
-                        {comp.comparison_type === 'test_import' ? (
-                          <Badge className="bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-500/50">
-                            🧪 Test
-                          </Badge>
-                        ) : (
-                          <Badge variant={isBaseline ? "default" : "secondary"}>
-                            {isBaseline ? "Base" : "Revisión"}
-                          </Badge>
-                        )}
+                        <Badge variant={isBaseline ? "default" : "secondary"}>
+                          {isBaseline ? "Base" : "Revisión"}
+                        </Badge>
                       </TableCell>
                       <TableCell className="text-right">
                         {comp.total_changes > 0 ? (

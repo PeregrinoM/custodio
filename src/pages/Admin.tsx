@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, BookPlus, RefreshCw, LogOut, AlertTriangle, Copy, Trash2, Settings, FlaskConical } from "lucide-react";
+import { Loader2, BookPlus, RefreshCw, LogOut, AlertTriangle, Copy, Trash2, Settings } from "lucide-react";
 
 interface ImportProgress {
   status: string;
@@ -51,7 +51,6 @@ const Admin = () => {
   const [debugBookId, setDebugBookId] = useState<string>('174');
   const [debugBookCode, setDebugBookCode] = useState<string>('');
   const [availableBookCodes, setAvailableBookCodes] = useState<string[]>([]);
-  const [importingTestSeed, setImportingTestSeed] = useState(false);
   const { isAdmin, loading: adminCheckLoading } = useAdminCheck();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -345,41 +344,6 @@ const Admin = () => {
     navigate("/");
   };
 
-  const handleImportTestSeed = async () => {
-    setImportingTestSeed(true);
-    
-    try {
-      toast({
-        title: "🧪 Importando libro de prueba",
-        description: "Importando PP con 100 errores distribuidos...",
-      });
-
-      const { data, error } = await supabase.functions.invoke('import-test-seed-book');
-
-      if (error) throw error;
-
-      if (!data.success) {
-        throw new Error(data.error || 'Error desconocido');
-      }
-
-      toast({
-        title: "✅ Libro de prueba importado",
-        description: `${data.title}: ${data.totalChapters} capítulos con ${data.totalErrors} errores en ${data.affectedParagraphs} párrafos`,
-      });
-
-      await loadBooks();
-    } catch (error) {
-      console.error('Error importing test seed:', error);
-      toast({
-        title: '❌ Error al importar libro de prueba',
-        description: error instanceof Error ? error.message : 'Error desconocido',
-        variant: 'destructive',
-      });
-    } finally {
-      setImportingTestSeed(false);
-    }
-  };
-
   if (loading || adminCheckLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background flex items-center justify-center">
@@ -595,16 +559,6 @@ const Admin = () => {
                 {importing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Importar libro
               </Button>
-              <Button 
-                onClick={handleImportTestSeed} 
-                disabled={importingTestSeed}
-                variant="outline"
-                className="border-purple-500/50 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
-              >
-                {importingTestSeed && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                <FlaskConical className="mr-2 h-4 w-4" />
-                Importar PP de Prueba (100 errores)
-              </Button>
             </div>
 
             {/* Import Progress Indicator */}
@@ -672,16 +626,9 @@ const Admin = () => {
                   <CardContent className="pt-6">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="font-display text-xl font-semibold text-foreground">
-                            {book.title}
-                          </h3>
-                          {book.is_test_seed && (
-                            <span className="px-2 py-1 text-xs font-bold rounded-full bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/50">
-                              🧪 TEST
-                            </span>
-                          )}
-                        </div>
+                        <h3 className="font-display text-xl font-semibold text-foreground mb-2">
+                          {book.title}
+                        </h3>
                         <div className="space-y-1 text-sm text-muted-foreground">
                           <p>Código: <span className="font-mono font-semibold">{book.code}</span></p>
                           <p>Última revisión: {new Date(book.last_check_date).toLocaleDateString('es-ES', {
