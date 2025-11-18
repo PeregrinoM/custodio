@@ -44,18 +44,19 @@ serve(async (req) => {
     // Apply errors to the book data
     const modifiedBook = applyErrorsToBook(bookData.chapters, errorPositions);
 
-    // Import the book with is_test_seed flag
+    // Import the book with is_test_seed flag using unique test code
+    const testBookCode = 'PP_TEST';
+    
     const { data: existingBook } = await supabase
       .from('books')
       .select('id')
-      .eq('code', 'PP')
-      .eq('is_test_seed', true)
+      .eq('code', testBookCode)
       .single();
 
     let bookId: string;
 
     if (existingBook) {
-      console.log('📚 Libro de prueba PP ya existe, actualizando...');
+      console.log('📚 Libro de prueba PP_TEST ya existe, actualizando...');
       
       // Delete existing chapters and paragraphs
       await supabase
@@ -63,14 +64,23 @@ serve(async (req) => {
         .delete()
         .eq('book_id', existingBook.id);
 
+      // Update book stats
+      await supabase
+        .from('books')
+        .update({
+          total_changes: 100,
+          last_check_date: new Date().toISOString()
+        })
+        .eq('id', existingBook.id);
+
       bookId = existingBook.id;
     } else {
-      console.log('📚 Creando nuevo libro de prueba PP...');
+      console.log('📚 Creando nuevo libro de prueba PP_TEST...');
       
       const { data: newBook, error: bookError } = await supabase
         .from('books')
         .insert({
-          code: 'PP',
+          code: testBookCode,
           title: 'Patriarcas y Profetas (TEST)',
           language: 'es',
           book_code_api: 'PP',
@@ -152,7 +162,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         bookId: bookId,
-        code: 'PP',
+        code: 'PP_TEST',
         title: 'Patriarcas y Profetas (TEST)',
         totalChapters: modifiedBook.length,
         totalParagraphs: insertedParagraphs,
