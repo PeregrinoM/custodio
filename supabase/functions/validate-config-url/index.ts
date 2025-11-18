@@ -9,8 +9,32 @@ serve(async (req) => {
   try {
     const { baseUrl, folderId, folderPath } = await req.json();
 
-    // Construct the full URL
+    // Whitelist allowed domains to prevent SSRF attacks
+    const allowedDomains = ['m.egwwritings.org', 'egwwritings.org'];
+    
+    // Construct and validate the URL
     const fullUrl = `${baseUrl}${folderPath}${folderId}`;
+    
+    try {
+      const url = new URL(fullUrl);
+      if (!allowedDomains.includes(url.hostname)) {
+        throw new Error(`Invalid domain. Only ${allowedDomains.join(', ')} are allowed.`);
+      }
+    } catch (urlError) {
+      const errorMsg = urlError instanceof Error ? urlError.message : 'Invalid URL format';
+      console.error('[VALIDATE-CONFIG] URL validation failed:', errorMsg);
+      return new Response(
+        JSON.stringify({
+          isValid: false,
+          error: errorMsg,
+          message: '❌ Invalid URL. Please use only egwwritings.org domains.'
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
+    }
     
     console.log(`[VALIDATE-CONFIG] Testing URL: ${fullUrl}`);
 
