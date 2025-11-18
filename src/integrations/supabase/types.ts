@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      book_catalog: {
+        Row: {
+          book_code: string
+          created_at: string | null
+          egw_book_id: number
+          folder_id: number | null
+          id: string
+          is_active: boolean | null
+          language: string | null
+          last_validated: string | null
+          title_es: string
+          updated_at: string | null
+          validation_error: string | null
+          validation_status: string | null
+        }
+        Insert: {
+          book_code: string
+          created_at?: string | null
+          egw_book_id: number
+          folder_id?: number | null
+          id?: string
+          is_active?: boolean | null
+          language?: string | null
+          last_validated?: string | null
+          title_es: string
+          updated_at?: string | null
+          validation_error?: string | null
+          validation_status?: string | null
+        }
+        Update: {
+          book_code?: string
+          created_at?: string | null
+          egw_book_id?: number
+          folder_id?: number | null
+          id?: string
+          is_active?: boolean | null
+          language?: string | null
+          last_validated?: string | null
+          title_es?: string
+          updated_at?: string | null
+          validation_error?: string | null
+          validation_status?: string | null
+        }
+        Relationships: []
+      }
       book_comparisons: {
         Row: {
           book_id: string
@@ -94,6 +139,36 @@ export type Database = {
           title?: string
           total_changes?: number | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      catalog_config: {
+        Row: {
+          config_key: string
+          config_value: string
+          created_at: string | null
+          description: string | null
+          id: string
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          config_key: string
+          config_value: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          config_key?: string
+          config_value?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          updated_at?: string | null
+          updated_by?: string | null
         }
         Relationships: []
       }
