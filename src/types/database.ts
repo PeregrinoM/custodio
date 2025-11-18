@@ -9,6 +9,7 @@ export interface Book {
   imported_at: string;
   language: string;
   book_code_api: string | null;
+  is_test_seed?: boolean;
 }
 
 export interface Comment {
