@@ -24,8 +24,15 @@ serve(async (req) => {
   try {
     const { bookId, testMode } = await req.json();
     
+    // Validate bookId input
     if (!bookId) {
       throw new Error('bookId es requerido');
+    }
+    
+    // Ensure bookId is a valid positive integer
+    const parsedBookId = parseInt(String(bookId), 10);
+    if (isNaN(parsedBookId) || parsedBookId <= 0 || parsedBookId > 10000) {
+      throw new Error('bookId debe ser un número entero positivo válido (1-10000)');
     }
 
     console.log(`[SCRAPING] Iniciando scraping del libro ID: ${bookId}`);
