@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Book } from "@/types/database";
 import { syncHistoricalData } from "@/lib/compareUtils";
+import { VersionTimeline } from "./VersionTimeline";
 import {
   Table,
   TableBody,
@@ -62,6 +63,7 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedBook, setSelectedBook] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<string>("all");
+  const [selectedVersionType, setSelectedVersionType] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [searchNotes, setSearchNotes] = useState("");
@@ -70,10 +72,12 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [editNoteText, setEditNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+  const [activeBaselines, setActiveBaselines] = useState<number>(0);
   const { toast } = useToast();
 
   useEffect(() => {
     loadComparisons();
+    loadActiveBaselines();
   }, [selectedBook, selectedType, dateFrom, dateTo]);
 
   useEffect(() => {
@@ -133,7 +137,57 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
     }
   };
 
+  const loadActiveBaselines = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('book_versions')
+        .select('book_id', { count: 'exact' })
+        .eq('is_baseline', true);
+
+      if (error) throw error;
+      setActiveBaselines(data?.length || 0);
+    } catch (error) {
+      console.error("Error loading active baselines:", error);
+    }
+  };
+
+  const getBaselineVersionAtDate = async (bookId: string, comparisonDate: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('book_versions')
+        .select('id, version_number, is_baseline, import_date')
+        .eq('book_id', bookId)
+        .lte('import_date', comparisonDate)
+        .order('import_date', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error) {
+        console.error('Error fetching baseline version:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error in getBaselineVersionAtDate:', error);
+      return null;
+    }
+  };
+
   const filteredComparisons = comparisons.filter(comp => {
+    // Version type filter
+    if (selectedVersionType !== "all") {
+      if (selectedVersionType === "baseline" && comp.comparison_type !== 'initial_import') {
+        return false;
+      }
+      if (selectedVersionType === "revisions" && comp.comparison_type === 'initial_import') {
+        return false;
+      }
+      if (selectedVersionType === "baseline_changes" && !comp.version_notes?.includes('Baseline changed')) {
+        return false;
+      }
+    }
+
     if (searchNotes && comp.version_notes) {
       return comp.version_notes.toLowerCase().includes(searchNotes.toLowerCase());
     }
@@ -200,6 +254,7 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
   const clearFilters = () => {
     setSelectedBook("all");
     setSelectedType("all");
+    setSelectedVersionType("all");
     setDateFrom("");
     setDateTo("");
     setSearchNotes("");
@@ -335,7 +390,7 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
         )}
 
         {/* Statistics Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="bg-muted/50">
             <CardContent className="pt-6">
               <div className="text-2xl font-bold text-primary">{filteredComparisons.length}</div>
@@ -348,8 +403,14 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
                 {needsSync ? getTotalChangesFromBooks() : getTotalChangesSum()}
               </div>
               <p className="text-sm text-muted-foreground">
-                Cambios detectados {needsSync && "(desde libros)"}
+                {needsSync ? "Cambios detectados (sin sincronizar)" : "Cambios detectados"}
               </p>
+            </CardContent>
+          </Card>
+          <Card className="bg-muted/50">
+            <CardContent className="pt-6">
+              <div className="text-2xl font-bold text-green-600 dark:text-green-400">{activeBaselines}</div>
+              <p className="text-sm text-muted-foreground">Versiones base activas</p>
             </CardContent>
           </Card>
           <Card className="bg-muted/50">
@@ -359,6 +420,11 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Version Timeline - Show when a specific book is selected */}
+        {selectedBook !== "all" && (
+          <VersionTimeline bookId={selectedBook} />
+        )}
 
         {/* Filters */}
         <div className="space-y-4">
@@ -370,7 +436,7 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
             </Button>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div>
               <label className="text-sm font-medium mb-2 block">Libro</label>
               <Select value={selectedBook} onValueChange={setSelectedBook}>
@@ -398,6 +464,21 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
                   <SelectItem value="all">Todos los tipos</SelectItem>
                   <SelectItem value="initial_import">Importación Inicial</SelectItem>
                   <SelectItem value="version_check">Comparación de Versión</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">Versión</label>
+              <Select value={selectedVersionType} onValueChange={setSelectedVersionType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas las versiones" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las versiones</SelectItem>
+                  <SelectItem value="baseline">Solo Líneas Base</SelectItem>
+                  <SelectItem value="revisions">Solo Revisiones</SelectItem>
+                  <SelectItem value="baseline_changes">Cambios de Base</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -441,7 +522,7 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
                 <TableHead className="w-[160px]">Tipo</TableHead>
                 <TableHead className="w-[100px] text-right">Cambios</TableHead>
                 <TableHead className="w-[100px] text-right">Párrafos</TableHead>
-                <TableHead className="w-[120px]">Base/Versión</TableHead>
+                <TableHead className="w-[140px]">Versión Base</TableHead>
                 <TableHead>Notas</TableHead>
               </TableRow>
             </TableHeader>
@@ -486,9 +567,15 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
                          </Tooltip>
                        </TableCell>
                       <TableCell>
-                        <Badge variant={isBaseline ? "default" : "secondary"}>
-                          {isBaseline ? "Base" : "Revisión"}
-                        </Badge>
+                        {comp.version_notes?.includes('Baseline changed') ? (
+                          <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/50">
+                            🔄 Cambio de Base
+                          </Badge>
+                        ) : (
+                          <Badge variant={isBaseline ? "default" : "secondary"}>
+                            {isBaseline ? "Base Inicial" : "Revisión"}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         {comp.total_changes > 0 ? (
@@ -505,18 +592,53 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
                         )}
                       </TableCell>
                       <TableCell>
-                        {isBaseline ? (
-                          <Badge variant="outline" className="bg-primary/5">
-                            Línea Base
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-secondary/50">
-                            Versión #{filteredComparisons.filter(
-                              c => c.book_id === comp.book_id && 
-                              new Date(c.comparison_date) <= new Date(comp.comparison_date)
-                            ).length}
-                          </Badge>
-                        )}
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex flex-col gap-1 cursor-help">
+                                {isBaseline ? (
+                                  <>
+                                    <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/50 w-fit">
+                                      ✓ BASE ACTUAL
+                                    </Badge>
+                                    <span className="text-xs text-muted-foreground">Versión #1</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Badge variant="outline" className="bg-secondary/50 w-fit">
+                                      Revisión #{filteredComparisons.filter(
+                                        c => c.book_id === comp.book_id && 
+                                        new Date(c.comparison_date) <= new Date(comp.comparison_date)
+                                      ).length}
+                                    </Badge>
+                                    {comp.version_notes?.includes('Baseline changed') && (
+                                      <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/50 text-xs w-fit">
+                                        🔄 Nueva Base
+                                      </Badge>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" className="max-w-xs">
+                              <p className="font-semibold mb-1">
+                                Tipo de comparación: {
+                                  comp.comparison_type === 'initial_import' 
+                                    ? 'Importación inicial (Versión #1)'
+                                    : `Revisión API (Versión #${filteredComparisons.filter(
+                                        c => c.book_id === comp.book_id && 
+                                        new Date(c.comparison_date) <= new Date(comp.comparison_date)
+                                      ).length})`
+                                }
+                              </p>
+                              {comp.version_notes?.includes('Baseline changed') && (
+                                <p className="text-xs text-amber-500 mt-2">
+                                  ⚠️ Esta comparación cambió la versión de referencia
+                                </p>
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableCell>
                        <TableCell className="max-w-xs">
                          <div className="flex items-center gap-2">
