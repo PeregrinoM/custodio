@@ -49,3 +49,25 @@ export interface ChangeHistoryEntry {
   old_text: string;
   new_text: string;
 }
+
+export interface BookVersion {
+  id: string;
+  book_id: string;
+  version_number: number;
+  source_type: 'api_import' | 'manual_pdf' | 'api_check';
+  import_date: string;
+  is_baseline: boolean;
+  edition_date: string | null;
+  version_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+export interface VersionSnapshot {
+  id: string;
+  version_id: string;
+  paragraph_id: string;
+  paragraph_text: string;
+  created_at: string;
+}

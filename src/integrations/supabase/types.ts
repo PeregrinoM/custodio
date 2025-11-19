@@ -103,6 +103,56 @@ export type Database = {
           },
         ]
       }
+      book_versions: {
+        Row: {
+          book_id: string
+          created_at: string | null
+          created_by: string | null
+          edition_date: string | null
+          id: string
+          import_date: string
+          is_baseline: boolean | null
+          source_type: string
+          updated_at: string | null
+          version_notes: string | null
+          version_number: number
+        }
+        Insert: {
+          book_id: string
+          created_at?: string | null
+          created_by?: string | null
+          edition_date?: string | null
+          id?: string
+          import_date?: string
+          is_baseline?: boolean | null
+          source_type: string
+          updated_at?: string | null
+          version_notes?: string | null
+          version_number: number
+        }
+        Update: {
+          book_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          edition_date?: string | null
+          id?: string
+          import_date?: string
+          is_baseline?: boolean | null
+          source_type?: string
+          updated_at?: string | null
+          version_notes?: string | null
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_versions_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       books: {
         Row: {
           book_code_api: string | null
@@ -325,6 +375,45 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      version_snapshots: {
+        Row: {
+          created_at: string | null
+          id: string
+          paragraph_id: string
+          paragraph_text: string
+          version_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          paragraph_id: string
+          paragraph_text: string
+          version_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          paragraph_id?: string
+          paragraph_text?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "version_snapshots_paragraph_id_fkey"
+            columns: ["paragraph_id"]
+            isOneToOne: false
+            referencedRelation: "paragraphs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "version_snapshots_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "book_versions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
