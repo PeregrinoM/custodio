@@ -129,6 +129,32 @@ export async function compareBookVersion(
   const comparisonDate = new Date().toISOString();
 
   try {
+    // Create new version record for this comparison
+    const { data: latestVersion } = await supabase
+      .from('book_versions')
+      .select('version_number')
+      .eq('book_id', bookId)
+      .order('version_number', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const newVersionNumber = (latestVersion?.version_number || 0) + 1;
+
+    const { data: newVersion, error: versionError } = await supabase
+      .from('book_versions')
+      .insert({
+        book_id: bookId,
+        version_number: newVersionNumber,
+        source_type: 'api_check',
+        import_date: comparisonDate,
+        is_baseline: false,
+        version_notes: `Revision check - ${newBookData.chapters.length} chapters`,
+      })
+      .select()
+      .single();
+
+    if (versionError) throw versionError;
+
     // Fetch all chapters for this book
     const { data: chapters, error: chaptersError } = await supabase
       .from('chapters')
@@ -227,6 +253,13 @@ export async function compareBookVersion(
           if (updateError) {
             console.error('Error updating paragraph:', updateError);
           }
+
+          // Create snapshot for this changed paragraph in the new version
+          await supabase.from('version_snapshots').insert({
+            version_id: newVersion.id,
+            paragraph_id: existingParagraph.id,
+            paragraph_text: newParagraph.content,
+          });
         }
       }
 
@@ -430,6 +463,22 @@ export async function importBook(bookData: EGWBook): Promise<string> {
 
     if (bookError) throw bookError;
 
+    // Create initial version record
+    const { data: version, error: versionError } = await supabase
+      .from('book_versions')
+      .insert({
+        book_id: book.id,
+        version_number: 1,
+        source_type: 'api_import',
+        import_date: book.imported_at,
+        is_baseline: true,
+        version_notes: `Initial import: ${bookData.chapters.length} chapters`,
+      })
+      .select()
+      .single();
+
+    if (versionError) throw versionError;
+
     // Insert chapters and paragraphs
     for (const chapterData of bookData.chapters) {
       const { data: chapter, error: chapterError } = await supabase
@@ -461,6 +510,28 @@ export async function importBook(bookData: EGWBook): Promise<string> {
         .insert(paragraphsToInsert);
 
       if (parasError) throw parasError;
+
+      // Create snapshots for this chapter's paragraphs
+      const { data: allParagraphs, error: fetchParasError } = await supabase
+        .from('paragraphs')
+        .select('id, base_text')
+        .eq('chapter_id', chapter.id);
+
+      if (fetchParasError) throw fetchParasError;
+
+      if (allParagraphs && allParagraphs.length > 0) {
+        const snapshots = allParagraphs.map(p => ({
+          version_id: version.id,
+          paragraph_id: p.id,
+          paragraph_text: p.base_text,
+        }));
+
+        const { error: snapshotError } = await supabase
+          .from('version_snapshots')
+          .insert(snapshots);
+
+        if (snapshotError) throw snapshotError;
+      }
     }
 
     // Register initial import in history

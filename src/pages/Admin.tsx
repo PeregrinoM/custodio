@@ -10,6 +10,7 @@ import BookVersionHistory from "@/components/BookVersionHistory";
 import { DeleteBookDialog } from "@/components/DeleteBookDialog";
 import { ProgressTracker } from "@/components/ProgressTracker";
 import { BookCatalogManager } from "@/components/BookCatalogManager";
+import { BookVersionSelector } from "@/components/BookVersionSelector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -640,6 +641,10 @@ const Admin = () => {
                         </div>
                       </div>
                       <div className="flex gap-2">
+                        <BookVersionSelector 
+                          bookId={book.id} 
+                          bookTitle={book.title} 
+                        />
                         <Button
                           onClick={() => handleCompareBook(book)}
                           disabled={comparing === book.id || deletingBook === book.code}
