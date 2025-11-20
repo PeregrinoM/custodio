@@ -63,7 +63,7 @@ const AdminConfig = () => {
       console.error("Error loading config:", error);
       toast({
         title: "Error",
-        description: "Failed to load configuration",
+        description: "No se pudo cargar la configuración",
         variant: "destructive",
       });
     } finally {
@@ -92,7 +92,7 @@ const AdminConfig = () => {
       });
 
       toast({
-        title: data.isValid ? "✅ Validation Successful" : "❌ Validation Failed",
+        title: data.isValid ? "✅ Validación Exitosa" : "❌ Validación Fallida",
         description: data.message,
         variant: data.isValid ? "default" : "destructive",
       });
@@ -100,11 +100,11 @@ const AdminConfig = () => {
       console.error("Error testing URL:", error);
       setValidationResult({
         isValid: false,
-        message: "Failed to validate URL. Please check your internet connection."
+        message: "No se pudo validar la URL. Por favor verifica tu conexión a internet."
       });
       toast({
         title: "Error",
-        description: "Failed to test configuration",
+        description: "No se pudo probar la configuración",
         variant: "destructive",
       });
     } finally {
@@ -116,8 +116,8 @@ const AdminConfig = () => {
     // Validate before saving
     if (!config.library_base_url || !config.library_folder_id) {
       toast({
-        title: "Validation Error",
-        description: "Please fill in all required fields",
+        title: "Error de Validación",
+        description: "Por favor completa todos los campos requeridos",
         variant: "destructive",
       });
       return;
@@ -143,8 +143,8 @@ const AdminConfig = () => {
       }
 
       toast({
-        title: "✅ Configuration Saved",
-        description: "System configuration updated successfully",
+        title: "✅ Configuración Guardada",
+        description: "La configuración del sistema se actualizó exitosamente",
       });
 
       // Reload config to get updated timestamps
@@ -153,7 +153,7 @@ const AdminConfig = () => {
       console.error("Error saving config:", error);
       toast({
         title: "Error",
-        description: "Failed to save configuration",
+        description: "No se pudo guardar la configuración",
         variant: "destructive",
       });
     } finally {
@@ -186,19 +186,19 @@ const AdminConfig = () => {
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-foreground mb-2 flex items-center gap-3">
             <Settings className="h-8 w-8 text-primary" />
-            System Configuration
+            Configuración del Sistema
           </h1>
           <p className="text-muted-foreground">
-            Manage global system settings. Changes here affect how the application connects to EGW Writings.
+            Administra los ajustes globales del sistema. Los cambios aquí afectan cómo la aplicación se conecta a EGW Writings.
           </p>
         </div>
 
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>⚙️ EGW Connection Settings</CardTitle>
+            <CardTitle>⚙️ Configuración de Conexión EGW</CardTitle>
             <CardDescription>
-              Configure the source URLs and parameters for scraping the EGW book catalog.
-              These settings are critical for system resilience.
+              Configura las URLs de origen y parámetros para obtener el catálogo de libros de EGW.
+              Estos ajustes son críticos para la resiliencia del sistema.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -215,7 +215,7 @@ const AdminConfig = () => {
               />
               <Alert>
                 <AlertDescription className="text-xs text-muted-foreground">
-                  The root URL of the EGW Writings website. Usually doesn't need to change.
+                  La URL raíz del sitio web de EGW Writings. Normalmente no necesita cambios.
                 </AlertDescription>
               </Alert>
             </div>
@@ -223,7 +223,7 @@ const AdminConfig = () => {
             {/* Folder Path */}
             <div className="space-y-2">
               <label className="text-sm font-semibold text-foreground">
-                📂 Folder Path Template
+                📂 Plantilla de Ruta de Carpeta
               </label>
               <Input
                 value={config.library_folder_path}
@@ -233,7 +233,7 @@ const AdminConfig = () => {
               />
               <Alert>
                 <AlertDescription className="text-xs text-muted-foreground">
-                  Path template for folder URLs. Change '/es/' to '/en/' for English books.
+                  Plantilla de ruta para URLs de carpetas. Cambia '/es/' a '/en/' para libros en inglés.
                 </AlertDescription>
               </Alert>
             </div>
@@ -253,9 +253,9 @@ const AdminConfig = () => {
               <Alert className="border-amber-500 bg-amber-50 dark:bg-amber-950/20">
                 <AlertTriangle className="h-4 w-4 text-amber-600" />
                 <AlertDescription className="text-xs text-amber-800 dark:text-amber-200">
-                  <strong>Critical Setting:</strong> If EGW changes their folder structure 
-                  (e.g., from <code>/folders/236</code> to <code>/folders/237</code>), 
-                  update this value here. This prevents the entire system from breaking.
+                  <strong>Configuración Crítica:</strong> Si EGW cambia su estructura de carpetas 
+                  (ej., de <code>/folders/236</code> a <code>/folders/237</code>), 
+                  actualiza este valor aquí. Esto evita que todo el sistema falle.
                 </AlertDescription>
               </Alert>
             </div>
@@ -263,7 +263,7 @@ const AdminConfig = () => {
             {/* Language */}
             <div className="space-y-2">
               <label className="text-sm font-semibold text-foreground">
-                🌍 Primary Language
+                🌍 Idioma Principal
               </label>
               <Input
                 value={config.library_language}
@@ -274,7 +274,7 @@ const AdminConfig = () => {
               />
               <Alert>
                 <AlertDescription className="text-xs text-muted-foreground">
-                  Language code: 'es' for Spanish, 'en' for English, 'fr' for French, etc.
+                  Código de idioma: 'es' para español, 'en' para inglés, 'fr' para francés, etc.
                 </AlertDescription>
               </Alert>
             </div>
@@ -304,11 +304,11 @@ const AdminConfig = () => {
                 {testing ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Testing...
+                    Probando...
                   </>
                 ) : (
                   <>
-                    🔍 Test Configuration
+                    🔍 Probar Configuración
                   </>
                 )}
               </Button>
@@ -321,12 +321,12 @@ const AdminConfig = () => {
                 {saving ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
+                    Guardando...
                   </>
                 ) : (
                   <>
                     <Save className="mr-2 h-4 w-4" />
-                    Save Configuration
+                    Guardar Configuración
                   </>
                 )}
               </Button>
@@ -335,8 +335,8 @@ const AdminConfig = () => {
             {/* Helper Text */}
             <Alert>
               <AlertDescription className="text-xs text-muted-foreground">
-                💡 <strong>Tip:</strong> Always test your configuration before saving. 
-                This validates that the URL is accessible and contains book data.
+                💡 <strong>Consejo:</strong> Siempre prueba tu configuración antes de guardar. 
+                Esto valida que la URL sea accesible y contenga datos de libros.
               </AlertDescription>
             </Alert>
           </CardContent>
@@ -345,7 +345,7 @@ const AdminConfig = () => {
         {/* Back Button */}
         <div className="mt-6">
           <Button variant="ghost" onClick={() => navigate("/admin")}>
-            ← Back to Admin Panel
+            ← Volver al Panel de Admin
           </Button>
         </div>
       </main>

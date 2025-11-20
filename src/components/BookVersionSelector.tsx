@@ -19,7 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, Calendar, FileText } from "lucide-react";
+import { CheckCircle, Calendar, FileText, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -93,7 +93,7 @@ async function setBookBaseline(
         total_changes: 0,
         changed_paragraphs: 0,
         chapters_affected: [],
-        version_notes: `Baseline changed to version ${newBaselineVersionId}`,
+        version_notes: `Línea base cambiada a versión ${newBaselineVersionId}`,
       });
 
     if (auditError) {
@@ -154,6 +154,9 @@ export const BookVersionSelector = ({ bookId, bookTitle }: BookVersionSelectorPr
       });
 
       await loadVersions();
+      
+      // Emit custom event to refresh BookVersionHistory
+      window.dispatchEvent(new CustomEvent('baselineChanged', { detail: { bookId } }));
     } catch (error) {
       console.error('Error setting baseline:', error);
       toast({
@@ -263,7 +266,14 @@ export const BookVersionSelector = ({ bookId, bookTitle }: BookVersionSelectorPr
                             onClick={() => handleSetBaseline(version.id, version.version_number)}
                             disabled={changingBaseline}
                           >
-                            Designar como Base
+                            {changingBaseline ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Cambiando...
+                              </>
+                            ) : (
+                              'Designar como Base'
+                            )}
                           </Button>
                         )}
                       </TableCell>
