@@ -3,6 +3,7 @@ import { BookOpen, User, LogOut, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminCheck } from "@/hooks/useAdminCheck";
+import { DarkModeToggle } from "./DarkModeToggle";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,6 +70,8 @@ const Navbar = () => {
             <Link to="/libros" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
               Libros
             </Link>
+            
+            <DarkModeToggle />
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
