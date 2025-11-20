@@ -125,7 +125,7 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
   const getComparisonTypeBadge = (comp: BookComparison) => {
     if (comp.comparison_type === 'test_import') {
       return (
-        <Badge className="bg-gradient-to-r from-purple-500/20 to-purple-600/20 text-purple-700 dark:text-purple-300 border-purple-500/50 font-medium">
+        <Badge className="bg-purple-100 dark:bg-gradient-to-r dark:from-purple-500/20 dark:to-purple-600/20 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-500/50 font-medium">
           <FlaskConical className="h-3 w-3 mr-1" />
           Prueba
         </Badge>
@@ -134,7 +134,7 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
     
     if (comp.version_notes?.includes('Línea base cambiada')) {
       return (
-        <Badge className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-700 dark:text-amber-300 border-amber-500/50 font-medium animate-pulse">
+        <Badge className="bg-amber-100 dark:bg-gradient-to-r dark:from-amber-500/20 dark:to-orange-500/20 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-500/50 font-medium animate-pulse">
           <RefreshCw className="h-3 w-3 mr-1" />
           Cambio de Base
         </Badge>
@@ -143,7 +143,7 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
     
     if (comp.comparison_type === 'initial_import') {
       return (
-        <Badge className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-700 dark:text-green-300 border-green-500/50 font-medium">
+        <Badge className="bg-green-100 dark:bg-gradient-to-r dark:from-green-500/20 dark:to-emerald-500/20 text-green-700 dark:text-green-300 border-green-300 dark:border-green-500/50 font-medium">
           <CheckCircle className="h-3 w-3 mr-1" />
           Base Inicial
         </Badge>
@@ -151,7 +151,7 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
     }
     
     return (
-      <Badge className="bg-gradient-to-r from-blue-500/20 to-cyan-500/20 text-blue-700 dark:text-blue-300 border-blue-500/50 font-medium">
+      <Badge className="bg-blue-100 dark:bg-gradient-to-r dark:from-blue-500/20 dark:to-cyan-500/20 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-500/50 font-medium">
         <FileSearch className="h-3 w-3 mr-1" />
         Revisión
       </Badge>
@@ -525,7 +525,7 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
                         </TableCell>
                         <TableCell>
                           {isCurrentBaseline ? (
-                            <Badge className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-700 dark:text-green-300 border-green-500/50 font-medium">
+                            <Badge className="bg-green-100 dark:bg-gradient-to-r dark:from-green-500/20 dark:to-emerald-500/20 text-green-700 dark:text-green-300 border-green-300 dark:border-green-500/50 font-medium">
                               <CheckCircle className="h-3 w-3 mr-1" />
                               BASE ACTUAL #{currentBaselineInfo?.versionNumber}
                             </Badge>
