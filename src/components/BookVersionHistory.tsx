@@ -84,6 +84,18 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
     checkIfNeedsSync();
   }, [comparisons, books]);
 
+  // Listen for baseline changes to refresh data
+  useEffect(() => {
+    const handleBaselineChange = () => {
+      console.log('📢 Baseline changed, refreshing history...');
+      loadComparisons();
+      loadActiveBaselines();
+    };
+
+    window.addEventListener('baselineChanged', handleBaselineChange);
+    return () => window.removeEventListener('baselineChanged', handleBaselineChange);
+  }, []);
+
   const loadComparisons = async () => {
     setLoading(true);
     try {
