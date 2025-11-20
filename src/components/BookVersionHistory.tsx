@@ -73,11 +73,13 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
   const [editNoteText, setEditNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
   const [activeBaselines, setActiveBaselines] = useState<number>(0);
+  const [currentBaselines, setCurrentBaselines] = useState<Map<string, { versionNumber: number, versionId: string }>>(new Map());
   const { toast } = useToast();
 
   useEffect(() => {
     loadComparisons();
     loadActiveBaselines();
+    loadCurrentBaselines();
   }, [selectedBook, selectedType, dateFrom, dateTo]);
 
   useEffect(() => {
@@ -90,6 +92,7 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
       console.log('📢 Baseline changed, refreshing history...');
       loadComparisons();
       loadActiveBaselines();
+      loadCurrentBaselines();
     };
 
     window.addEventListener('baselineChanged', handleBaselineChange);
@@ -160,6 +163,29 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
       setActiveBaselines(data?.length || 0);
     } catch (error) {
       console.error("Error loading active baselines:", error);
+    }
+  };
+
+  const loadCurrentBaselines = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('book_versions')
+        .select('book_id, version_number, id')
+        .eq('is_baseline', true);
+
+      if (error) throw error;
+      
+      const baselinesMap = new Map<string, { versionNumber: number, versionId: string }>();
+      data?.forEach(version => {
+        baselinesMap.set(version.book_id, {
+          versionNumber: version.version_number,
+          versionId: version.id
+        });
+      });
+      
+      setCurrentBaselines(baselinesMap);
+    } catch (error) {
+      console.error("Error loading current baselines:", error);
     }
   };
 
@@ -556,6 +582,18 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
                   const book = getBookInfo(comp.book_id);
                   const baseline = getBaselineComparison(comp.book_id);
                   const isBaseline = comp.comparison_type === 'initial_import';
+                  
+                  // Get the current baseline version for this book
+                  const currentBaselineInfo = currentBaselines.get(comp.book_id);
+                  
+                  // Calculate version number for this comparison
+                  const versionNumber = filteredComparisons.filter(
+                    c => c.book_id === comp.book_id && 
+                    new Date(c.comparison_date) <= new Date(comp.comparison_date)
+                  ).length;
+                  
+                  // Check if this specific version is currently the baseline
+                  const isCurrentBaseline = currentBaselineInfo?.versionNumber === versionNumber;
 
                   return (
                      <TableRow key={comp.id} className="group">
@@ -579,7 +617,7 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
                          </Tooltip>
                        </TableCell>
                       <TableCell>
-                        {comp.version_notes?.includes('Baseline changed') ? (
+                        {comp.version_notes?.includes('Línea base cambiada') ? (
                           <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/50">
                             🔄 Cambio de Base
                           </Badge>
@@ -608,46 +646,28 @@ const BookVersionHistory = ({ books }: BookVersionHistoryProps) => {
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <div className="flex flex-col gap-1 cursor-help">
-                                {isBaseline ? (
+                                {isCurrentBaseline ? (
                                   <>
                                     <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/50 w-fit">
                                       ✓ BASE ACTUAL
                                     </Badge>
-                                    <span className="text-xs text-muted-foreground">Versión #1</span>
+                                    <span className="text-xs text-muted-foreground">Versión #{versionNumber}</span>
                                   </>
                                 ) : (
                                   <>
                                     <Badge variant="outline" className="bg-secondary/50 w-fit">
-                                      Revisión #{filteredComparisons.filter(
-                                        c => c.book_id === comp.book_id && 
-                                        new Date(c.comparison_date) <= new Date(comp.comparison_date)
-                                      ).length}
+                                      Revisión #{versionNumber}
                                     </Badge>
-                                    {comp.version_notes?.includes('Baseline changed') && (
-                                      <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/50 text-xs w-fit">
-                                        🔄 Nueva Base
-                                      </Badge>
-                                    )}
                                   </>
                                 )}
                               </div>
                             </TooltipTrigger>
-                            <TooltipContent side="right" className="max-w-xs">
-                              <p className="font-semibold mb-1">
-                                Tipo de comparación: {
-                                  comp.comparison_type === 'initial_import' 
-                                    ? 'Importación inicial (Versión #1)'
-                                    : `Revisión API (Versión #${filteredComparisons.filter(
-                                        c => c.book_id === comp.book_id && 
-                                        new Date(c.comparison_date) <= new Date(comp.comparison_date)
-                                      ).length})`
-                                }
+                            <TooltipContent side="right">
+                              <p className="text-sm">
+                                {isCurrentBaseline 
+                                  ? "Esta es la versión base de referencia actual para detectar cambios" 
+                                  : "Versión de revisión comparada contra la base"}
                               </p>
-                              {comp.version_notes?.includes('Baseline changed') && (
-                                <p className="text-xs text-amber-500 mt-2">
-                                  ⚠️ Esta comparación cambió la versión de referencia
-                                </p>
-                              )}
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
