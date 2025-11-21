@@ -31,7 +31,7 @@ import {
 interface MonitoredBooksTableProps {
   books: Book[];
   onCompare: (book: Book) => void;
-  onDelete: (bookCode: string, bookTitle: string) => void;
+  onDelete: (bookId: string, bookCode: string, bookTitle: string) => void;
   comparing: string | null;
   deleting: string | null;
 }
@@ -201,7 +201,7 @@ export function MonitoredBooksTable({
                               )}
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => onDelete(book.code, book.title)}
+                              onClick={() => onDelete(book.id, book.code, book.title)}
                               disabled={isComparing || isDeleting}
                               className="text-destructive focus:text-destructive"
                             >
