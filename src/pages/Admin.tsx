@@ -8,6 +8,7 @@ import { useBookOperations } from "@/hooks/useBookOperations";
 import Navbar from "@/components/Navbar";
 import BookVersionHistory from "@/components/BookVersionHistory";
 import { DeleteBookDialog } from "@/components/DeleteBookDialog";
+import { ComparisonConfirmDialog } from "@/components/admin/ComparisonConfirmDialog";
 import { ProgressTracker } from "@/components/ProgressTracker";
 import { BookCatalogManager } from "@/components/BookCatalogManager";
 import { MonitoredBooksTable } from "@/components/admin/MonitoredBooksTable";
@@ -25,7 +26,9 @@ const Admin = () => {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [bookToDelete, setBookToDelete] = useState<{ code: string; title: string } | null>(null);
+  const [bookToDelete, setBookToDelete] = useState<{ id: string; code: string; title: string } | null>(null);
+  const [compareDialogOpen, setCompareDialogOpen] = useState(false);
+  const [bookToCompare, setBookToCompare] = useState<Book | null>(null);
   const [availableBookCodes, setAvailableBookCodes] = useState<string[]>([]);
   
   const { isAdmin, loading: adminCheckLoading } = useAdminCheck();
@@ -89,13 +92,21 @@ const Admin = () => {
     }
   };
 
-  const handleCompareBook = async (book: Book) => {
-    await handleCompare(book, loadBooks);
+  const handleCompareBook = (book: Book) => {
+    setBookToCompare(book);
+    setCompareDialogOpen(true);
   };
 
-  const handleDeleteBook = (bookCode: string, bookTitle: string) => {
+  const confirmCompareBook = async () => {
+    if (!bookToCompare) return;
+    setCompareDialogOpen(false);
+    await handleCompare(bookToCompare, loadBooks);
+    setBookToCompare(null);
+  };
+
+  const handleDeleteBook = (bookId: string, bookCode: string, bookTitle: string) => {
     console.log('🔴 [DELETE] Abriendo diálogo para:', bookCode, bookTitle);
-    setBookToDelete({ code: bookCode, title: bookTitle });
+    setBookToDelete({ id: bookId, code: bookCode, title: bookTitle });
     setDeleteDialogOpen(true);
   };
 
@@ -276,12 +287,22 @@ const Admin = () => {
         </Tabs>
       </main>
 
+      {/* Comparison Confirmation Dialog */}
+      <ComparisonConfirmDialog
+        open={compareDialogOpen}
+        onOpenChange={setCompareDialogOpen}
+        book={bookToCompare}
+        onConfirm={confirmCompareBook}
+        isComparing={!!comparing}
+      />
+
       {/* Delete Confirmation Dialog */}
       <DeleteBookDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         bookTitle={bookToDelete?.title || ""}
         bookCode={bookToDelete?.code || ""}
+        bookId={bookToDelete?.id || ""}
         onConfirm={confirmDeleteBook}
         isDeleting={!!deletingBook}
       />
