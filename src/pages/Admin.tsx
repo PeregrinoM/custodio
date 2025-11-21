@@ -14,6 +14,7 @@ import { BookCatalogManager } from "@/components/BookCatalogManager";
 import { MonitoredBooksTable } from "@/components/admin/MonitoredBooksTable";
 import { BookImportForm } from "@/components/admin/BookImportForm";
 import { DebugTocTool } from "@/components/admin/DebugTocTool";
+import { MonitoringStatsCard } from "@/components/admin/MonitoringStatsCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -30,6 +31,7 @@ const Admin = () => {
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const [bookToCompare, setBookToCompare] = useState<Book | null>(null);
   const [availableBookCodes, setAvailableBookCodes] = useState<string[]>([]);
+  const [totalChapters, setTotalChapters] = useState<number>(0);
   
   const { isAdmin, loading: adminCheckLoading } = useAdminCheck();
   const { toast } = useToast();
@@ -80,6 +82,17 @@ const Admin = () => {
 
       if (error) throw error;
       setBooks(data || []);
+
+      // Load total chapter count
+      if (data && data.length > 0) {
+        const { count } = await supabase
+          .from("chapters")
+          .select("*", { count: "exact", head: true })
+          .in("book_id", data.map(b => b.id));
+        setTotalChapters(count || 0);
+      } else {
+        setTotalChapters(0);
+      }
     } catch (error) {
       console.error("Error loading books:", error);
       toast({
@@ -230,7 +243,7 @@ const Admin = () => {
 
           {/* Tab 1: Gestión de Libros */}
           <TabsContent value="books" className="space-y-6">
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="font-display text-2xl font-bold text-foreground">
                   Libros Monitoreados
@@ -239,6 +252,12 @@ const Admin = () => {
                   Total: {books.length} {books.length === 1 ? 'libro' : 'libros'}
                 </div>
               </div>
+
+              {/* Monitoring Statistics */}
+              <MonitoringStatsCard 
+                books={books} 
+                totalChapters={totalChapters}
+              />
 
               <MonitoredBooksTable
                 books={books}
