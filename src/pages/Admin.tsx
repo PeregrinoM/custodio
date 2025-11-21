@@ -1,62 +1,48 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchBook, getAvailableBookCodes, isValidBookCode, getBookInfo } from "@/lib/egwApi";
-import { compareBookVersion, importBook, deleteBook } from "@/lib/compareUtils";
+import { getAvailableBookCodes } from "@/lib/egwApi";
 import { Book } from "@/types/database";
 import { useAdminCheck } from "@/hooks/useAdminCheck";
+import { useBookOperations } from "@/hooks/useBookOperations";
 import Navbar from "@/components/Navbar";
 import BookVersionHistory from "@/components/BookVersionHistory";
 import { DeleteBookDialog } from "@/components/DeleteBookDialog";
 import { ProgressTracker } from "@/components/ProgressTracker";
 import { BookCatalogManager } from "@/components/BookCatalogManager";
 import { MonitoredBooksTable } from "@/components/admin/MonitoredBooksTable";
+import { BookImportForm } from "@/components/admin/BookImportForm";
+import { DebugTocTool } from "@/components/admin/DebugTocTool";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, BookPlus, LogOut, AlertTriangle, Copy, Settings, Library, History, Wrench } from "lucide-react";
-
-interface ImportProgress {
-  status: string;
-  current: number;
-  total: number;
-  chapterName: string;
-  startTime: number;
-}
-
-interface CompareProgress {
-  status: string;
-  current: number;
-  total: number;
-  startTime: number;
-  bookTitle: string;
-}
+import { Loader2, LogOut, AlertTriangle, Settings, Library, History, Wrench } from "lucide-react";
 
 const Admin = () => {
   const [user, setUser] = useState<any>(null);
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
-  const [comparing, setComparing] = useState<string | null>(null);
-  const [compareProgress, setCompareProgress] = useState<CompareProgress | null>(null);
-  const [deletingBook, setDeletingBook] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [bookToDelete, setBookToDelete] = useState<{ code: string; title: string } | null>(null);
-  const [newBookCode, setNewBookCode] = useState("");
-  const [importing, setImporting] = useState(false);
-  const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
-  const [scrapingErrors, setScrapingErrors] = useState<string[]>([]);
-  const [debugHtml, setDebugHtml] = useState<any>(null);
-  const [isDebugging, setIsDebugging] = useState(false);
-  const [debugBookId, setDebugBookId] = useState<string>('174');
-  const [debugBookCode, setDebugBookCode] = useState<string>('');
   const [availableBookCodes, setAvailableBookCodes] = useState<string[]>([]);
+  
   const { isAdmin, loading: adminCheckLoading } = useAdminCheck();
   const { toast } = useToast();
   const navigate = useNavigate();
+  
+  // Use custom hook for book operations
+  const {
+    comparing,
+    compareProgress,
+    deletingBook,
+    importing,
+    importProgress,
+    handleCompare,
+    handleDelete,
+    handleImport,
+  } = useBookOperations();
 
   useEffect(() => {
     checkAuth();
@@ -104,52 +90,7 @@ const Admin = () => {
   };
 
   const handleCompareBook = async (book: Book) => {
-    setComparing(book.id);
-    
-    try {
-      toast({
-        title: "Comparando...",
-        description: `Obteniendo nueva versión de ${book.title}`,
-      });
-
-      // Initialize progress
-      setCompareProgress({
-        status: 'Obteniendo nueva versión del libro...',
-        current: 0,
-        total: 0,
-        startTime: Date.now(),
-        bookTitle: book.title
-      });
-
-      const newBookData = await fetchBook(book.code);
-      
-      // Update progress with total chapters
-      setCompareProgress(prev => prev ? {
-        ...prev,
-        status: 'Comparando capítulos...',
-        total: newBookData.chapters.length
-      } : null);
-
-      const result = await compareBookVersion(book.id, newBookData);
-
-      setCompareProgress(null);
-      toast({
-        title: "Comparación completada",
-        description: `Se detectaron ${result.totalChanges} cambio(s) en ${result.changedParagraphs} párrafo(s)`,
-      });
-
-      await loadBooks();
-    } catch (error) {
-      console.error("Error comparing book:", error);
-      setCompareProgress(null);
-      toast({
-        title: "Error",
-        description: "No se pudo completar la comparación",
-        variant: "destructive",
-      });
-    } finally {
-      setComparing(null);
-    }
+    await handleCompare(book, loadBooks);
   };
 
   const handleDeleteBook = (bookCode: string, bookTitle: string) => {
@@ -160,186 +101,11 @@ const Admin = () => {
 
   const confirmDeleteBook = async () => {
     if (!bookToDelete) return;
-
-    const { code, title } = bookToDelete;
-    console.log('🔴 [DELETE] Usuario confirmó eliminación de:', code);
-
-    setDeletingBook(code);
-
-    try {
-      console.log('🔴 [DELETE] Llamando deleteBook...');
-      await deleteBook(code);
-
-      toast({
-        title: "✅ Libro eliminado",
-        description: `${title} (${code}) fue eliminado correctamente`,
-        duration: 5000,
-      });
-
-      console.log('🔴 [DELETE] Recargando lista de libros...');
+    await handleDelete(bookToDelete.code, bookToDelete.title, async () => {
       await loadBooks();
-      
       setDeleteDialogOpen(false);
       setBookToDelete(null);
-    } catch (error) {
-      console.error('🔴 [DELETE] Error en handleDeleteBook:', error);
-      toast({
-        title: "❌ Error al eliminar",
-        description: error instanceof Error ? error.message : "Error desconocido al eliminar el libro",
-        variant: "destructive",
-        duration: 10000,
-      });
-    } finally {
-      setDeletingBook(null);
-    }
-  };
-
-  const handleImportBook = async () => {
-    const trimmedCode = newBookCode.trim();
-    
-    // Validation
-    if (!trimmedCode) {
-      toast({
-        title: "Error",
-        description: "Por favor ingresa un código de libro",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validate with available book codes
-    const isValid = await isValidBookCode(trimmedCode);
-    if (!isValid) {
-      toast({
-        title: "Código inválido",
-        description: `Códigos válidos: ${availableBookCodes.join(', ')}`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Check for duplicate
-    if (books.some(b => b.code === trimmedCode)) {
-      toast({
-        title: "Error",
-        description: "Este libro ya está siendo monitoreado",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setImporting(true);
-    setImportProgress({
-      status: 'Iniciando importación...',
-      current: 0,
-      total: 0,
-      chapterName: '',
-      startTime: Date.now()
     });
-
-    try {
-      const bookInfo = await getBookInfo(trimmedCode);
-      
-      setImportProgress(prev => prev ? {
-        ...prev,
-        status: `Extrayendo ${bookInfo?.title}...`,
-      } : null);
-
-      const bookData = await fetchBook(trimmedCode);
-      
-      setImportProgress(prev => prev ? {
-        ...prev,
-        status: 'Guardando en base de datos...',
-        total: bookData.chapters.length,
-        chapterName: bookData.chapters[0]?.title || ''
-      } : null);
-
-      await importBook(bookData);
-      
-      setImportProgress(null);
-      toast({
-        title: "✅ Libro importado exitosamente",
-        description: `${bookData.title}: ${bookData.chapters.length} capítulos importados`,
-      });
-
-      setNewBookCode("");
-      await loadBooks();
-    } catch (error) {
-      setImportProgress(null);
-      console.error('❌ Detalles del error de importación:', {
-        error,
-        message: error instanceof Error ? error.message : 'Desconocido',
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      
-      let errorMessage = 'Error desconocido';
-      
-      if (error instanceof Error) {
-        errorMessage = error.message;
-        
-        // Proporcionar mensajes de error más útiles
-        if (errorMessage.includes('Edge Function') || errorMessage.includes('FunctionsHttpError')) {
-          errorMessage = 'Error en el scraper. Revisa los logs del backend para más detalles.';
-        } else if (errorMessage.includes('violates') || errorMessage.includes('duplicate')) {
-          errorMessage = 'El libro ya existe en la base de datos. Usa "Comparar" en su lugar.';
-        } else if (errorMessage.includes('No se encontraron capítulos')) {
-          errorMessage = 'No se pudieron extraer capítulos del sitio. Verifica el código del libro.';
-        }
-      }
-      
-      setScrapingErrors(prev => [...prev, `${new Date().toLocaleString()}: ${errorMessage}`]);
-      
-      toast({
-        title: '❌ Error al importar',
-        description: errorMessage,
-        variant: 'destructive',
-        duration: 10000
-      });
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  const handleDebugToc = async () => {
-    setIsDebugging(true);
-    setDebugHtml(null);
-    
-    const bookIdToTest = parseInt(debugBookId);
-    
-    if (isNaN(bookIdToTest)) {
-      toast({
-        title: '❌ ID inválido',
-        description: 'Por favor ingresa un ID numérico válido',
-        variant: 'destructive'
-      });
-      setIsDebugging(false);
-      return;
-    }
-    
-    try {
-      const { data, error } = await supabase.functions.invoke('debug-toc', {
-        body: { bookId: bookIdToTest }
-      });
-
-      if (error) throw error;
-      
-      setDebugHtml(data);
-      
-      toast({
-        title: '✅ Debug completado',
-        description: `HTML obtenido para ID ${bookIdToTest}: ${data.htmlLength} caracteres`
-      });
-      
-    } catch (error) {
-      console.error('Debug error:', error);
-      toast({
-        title: '❌ Error en debug',
-        description: error instanceof Error ? error.message : 'Error desconocido',
-        variant: 'destructive'
-      });
-    } finally {
-      setIsDebugging(false);
-    }
   };
 
   const handleLogout = async () => {
@@ -480,192 +246,20 @@ const Admin = () => {
 
           {/* Tab 3: Herramientas */}
           <TabsContent value="tools" className="space-y-6">
-            {/* Debug TOC Section */}
-            <Card className="border-yellow-500/30 bg-yellow-50/50 dark:bg-yellow-950/10">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
-                  🔧 Validar Libro (Debug TOC)
-                </CardTitle>
-                <CardDescription>
-                  Herramienta para validar que un libro se puede importar correctamente antes de intentarlo.
-                  Verifica que el scraper puede extraer el índice de capítulos desde EGW Writings.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex gap-3">
-                  {/* Dropdown with available books */}
-                  <Select value={debugBookCode} onValueChange={async (code) => {
-                    setDebugBookCode(code);
-                    const bookInfo = await getBookInfo(code);
-                    if (bookInfo) {
-                      setDebugBookId(bookInfo.id.toString());
-                    }
-                  }}>
-                    <SelectTrigger className="w-[280px]">
-                      <SelectValue placeholder="Seleccionar libro..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableBookCodes.map(code => {
-                        return (
-                          <SelectItem key={code} value={code}>
-                            {code}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                  
-                  {/* Manual book ID input */}
-                  <Input
-                    type="number"
-                    placeholder="ID del libro (ej: 217)"
-                    value={debugBookId}
-                    onChange={(e) => setDebugBookId(e.target.value)}
-                    className="w-[180px]"
-                  />
-                  
-                  <Button 
-                    onClick={handleDebugToc} 
-                    disabled={isDebugging || !debugBookId}
-                    variant="outline"
-                  >
-                    {isDebugging ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Probando...
-                      </>
-                    ) : (
-                      '🔍 Probar TOC'
-                    )}
-                  </Button>
-                </div>
-                
-                {debugHtml && (
-                  <div className="space-y-4">
-                    <div className="bg-background p-4 rounded border border-green-500/30">
-                      <h3 className="font-bold mb-2 text-green-700 dark:text-green-400">✅ Validación exitosa</h3>
-                      <ul className="text-sm space-y-1">
-                        <li>URL: {debugHtml.url}</li>
-                        <li>Tamaño: {debugHtml.htmlLength} bytes</li>
-                        <li>Content-Type: {debugHtml.contentType}</li>
-                        <li>Status: {debugHtml.statusCode}</li>
-                      </ul>
-                    </div>
-                    
-                    <Accordion type="single" collapsible>
-                      <AccordionItem value="chapters">
-                        <AccordionTrigger>Sección "capítulo"</AccordionTrigger>
-                        <AccordionContent>
-                          <pre className="text-xs overflow-auto max-h-64 bg-muted p-2 rounded">
-                            {debugHtml.chaptersSection}
-                          </pre>
-                        </AccordionContent>
-                      </AccordionItem>
-                      
-                      <AccordionItem value="links">
-                        <AccordionTrigger>Sección links "&lt;a href"</AccordionTrigger>
-                        <AccordionContent>
-                          <pre className="text-xs overflow-auto max-h-64 bg-muted p-2 rounded">
-                            {debugHtml.linksSection}
-                          </pre>
-                        </AccordionContent>
-                      </AccordionItem>
-                      
-                      <AccordionItem value="fullhtml">
-                        <AccordionTrigger>HTML completo (muestra)</AccordionTrigger>
-                        <AccordionContent>
-                          <pre className="text-xs overflow-auto max-h-96 bg-muted p-2 rounded">
-                            {debugHtml.htmlSample}
-                          </pre>
-                        </AccordionContent>
-                      </AccordionItem>
-                    </Accordion>
-                    
-                    <Button 
-                      variant="secondary"
-                      onClick={() => {
-                        navigator.clipboard.writeText(debugHtml.fullHtml);
-                        toast({ title: 'HTML completo copiado al portapapeles' });
-                      }}
-                    >
-                      📋 Copiar HTML Completo
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            {/* Debug TOC Tool */}
+            <DebugTocTool availableBookCodes={availableBookCodes} />
 
-            {/* Import New Book Section */}
-            <Card className="border-primary/20 shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BookPlus className="h-5 w-5 text-primary" />
-                  Importar Nuevo Libro
-                </CardTitle>
-                <CardDescription>
-                  Ingresa el código de un libro de EGW Writings para comenzar a monitorearlo.
-                  <br />
-                  <span className="text-amber-600 dark:text-amber-400 font-medium mt-2 inline-block">
-                    💡 Tip: Usa la herramienta de Debug arriba para validar que el libro se puede importar correctamente.
-                  </span>
-                  <br />
-                  Códigos disponibles: {availableBookCodes.join(', ')}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex gap-3 mb-4">
-                  <Input
-                    placeholder="Código del libro (ej: DTG, CS, PP)"
-                    value={newBookCode}
-                    onChange={(e) => setNewBookCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
-                    disabled={importing}
-                    className="max-w-xs"
-                    maxLength={10}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !importing) {
-                        handleImportBook();
-                      }
-                    }}
-                  />
-                  <Button onClick={handleImportBook} disabled={importing || !newBookCode.trim()}>
-                    {importing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Importar libro
-                  </Button>
-                </div>
-
-                {/* Import Progress Indicator */}
-                {importProgress && (
-                  <ProgressTracker
-                    title="Importando libro"
-                    status={importProgress.status}
-                    current={importProgress.current}
-                    total={importProgress.total}
-                    startTime={importProgress.startTime}
-                    itemName="capítulo"
-                    itemLabel={importProgress.chapterName}
-                  />
-                )}
-
-                {/* Error Display */}
-                {scrapingErrors.length > 0 && (
-                  <div className="mt-4">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => {
-                        const errors = scrapingErrors.join('\n\n');
-                        navigator.clipboard.writeText(errors);
-                        toast({ title: 'Errores copiados al portapapeles' });
-                      }}
-                      className="text-destructive border-destructive/50 hover:bg-destructive/10"
-                    >
-                      <Copy className="mr-2 h-4 w-4" />
-                      ⚠️ Ver errores ({scrapingErrors.length})
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            {/* Import New Book Form */}
+            <BookImportForm
+              availableBookCodes={availableBookCodes}
+              existingBooks={books}
+              onImport={(code, info, onSuccess) => handleImport(code, info, async () => {
+                await loadBooks();
+                onSuccess();
+              })}
+              importing={importing}
+              importProgress={importProgress}
+            />
 
             {/* Book Catalog Management */}
             <Accordion type="single" collapsible>
