@@ -20,7 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, LogOut, AlertTriangle, Settings, Library, History, Wrench } from "lucide-react";
+import { Loader2, LogOut, AlertTriangle, Settings, Library, History, Wrench, FileUp } from "lucide-react";
 
 const Admin = () => {
   const [user, setUser] = useState<any>(null);
@@ -199,6 +199,10 @@ const Admin = () => {
             </p>
           </div>
           <div className="flex gap-3">
+            <Button onClick={() => navigate("/admin/import-manual")}>
+              <FileUp className="mr-2 h-4 w-4" />
+              Importar Versión Histórica
+            </Button>
             <Button onClick={() => navigate("/admin/config")} variant="outline">
               <Settings className="mr-2 h-4 w-4" />
               Configuración
