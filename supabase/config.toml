@@ -5,3 +5,9 @@ verify_jwt = true
 
 [functions.debug-toc]
 verify_jwt = true
+
+[functions.find-paragraph-matches]
+verify_jwt = true
+
+[functions.import-manual-version]
+verify_jwt = true

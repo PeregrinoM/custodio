@@ -9,6 +9,7 @@ import BookView from "./pages/BookView";
 import ChapterView from "./pages/ChapterView";
 import Admin from "./pages/Admin";
 import AdminConfig from "./pages/AdminConfig";
+import AdminManualImport from "./pages/AdminManualImport";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -27,6 +28,7 @@ const App = () => (
           <Route path="/capitulos/:id" element={<ChapterView />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/admin/config" element={<AdminConfig />} />
+          <Route path="/admin/import-manual" element={<AdminManualImport />} />
           <Route path="/auth" element={<Auth />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
