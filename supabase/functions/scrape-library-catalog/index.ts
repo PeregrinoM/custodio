@@ -93,13 +93,41 @@ serve(async (req) => {
 
     for (const book of uniqueBooks) {
       try {
-        // Generate book code first to check for existing books by code
-        const bookCode = book.title
-          .split(' ')
-          .filter(word => word.length > 2)
-          .slice(0, 2)
-          .map(word => word.charAt(0).toUpperCase())
-          .join('') || `BK${book.egw_book_id}`;
+        // Fetch official book code from EGW info page
+        let bookCode = '';
+        try {
+          const infoUrl = `${baseUrl}/es/book/${book.egw_book_id}/info`;
+          console.log(`[SCRAPE-CATALOG] Fetching book code from ${infoUrl}`);
+          
+          const infoResponse = await fetch(infoUrl, {
+            headers: { 'User-Agent': 'EGW-Monitor/1.0' }
+          });
+
+          if (infoResponse.ok) {
+            const infoHtml = await infoResponse.text();
+            
+            // Extract Book Code from info page
+            // Pattern: Book Code</dt><dd>CC</dd> or similar
+            const codeMatch = infoHtml.match(/Book Code[^>]*<\/dt>\s*<dd[^>]*>([^<]+)<\/dd>/i);
+            if (codeMatch && codeMatch[1]) {
+              bookCode = codeMatch[1].trim();
+              console.log(`[SCRAPE-CATALOG] Found official book code: ${bookCode} for book ${book.egw_book_id}`);
+            }
+          }
+        } catch (infoError) {
+          console.warn(`[SCRAPE-CATALOG] Could not fetch book code for ${book.egw_book_id}:`, infoError);
+        }
+
+        // Fallback: generate code from title if official code not found
+        if (!bookCode) {
+          bookCode = book.title
+            .split(' ')
+            .filter(word => word.length > 2)
+            .slice(0, 2)
+            .map(word => word.charAt(0).toUpperCase())
+            .join('') || `BK${book.egw_book_id}`;
+          console.log(`[SCRAPE-CATALOG] Using generated code: ${bookCode} for book ${book.egw_book_id}`);
+        }
 
         // Check if book already exists by book_code (primary match) or egw_book_id (secondary)
         const { data: existingByCode } = await supabaseClient
@@ -222,7 +250,7 @@ serve(async (req) => {
           }
 
           // Small delay to avoid overwhelming the server
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 800));
         } catch (tocError) {
           console.error(`[SCRAPE-CATALOG] Error fetching TOC for ${book.egw_book_id}:`, tocError);
           tocErrorCount++;
