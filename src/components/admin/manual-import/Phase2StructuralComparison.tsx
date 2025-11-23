@@ -35,11 +35,11 @@ export function Phase2StructuralComparison({ state, onNext, onBack }: Phase2Stru
         throw new Error('Libro no encontrado');
       }
 
-      // Count paragraphs in DB
+      // Count paragraphs in DB for this book (through chapters relationship)
       const { count: dbCount } = await supabase
         .from('paragraphs')
-        .select('id', { count: 'exact', head: true })
-        .eq('chapter_id', book.id);
+        .select('id, chapters!inner(book_id)', { count: 'exact', head: true })
+        .eq('chapters.book_id', book.id);
 
       const uploadedCount = state.rawParagraphs.length;
       
