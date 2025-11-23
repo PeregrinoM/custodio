@@ -93,79 +93,74 @@ serve(async (req) => {
 
     for (const book of uniqueBooks) {
       try {
-        // Check if book already exists
-        const { data: existing } = await supabaseClient
+        // Generate book code first to check for existing books by code
+        const bookCode = book.title
+          .split(' ')
+          .filter(word => word.length > 2)
+          .slice(0, 2)
+          .map(word => word.charAt(0).toUpperCase())
+          .join('') || `BK${book.egw_book_id}`;
+
+        // Check if book already exists by book_code (primary match) or egw_book_id (secondary)
+        const { data: existingByCode } = await supabaseClient
           .from("book_catalog")
-          .select("id, egw_book_id")
-          .eq("egw_book_id", book.egw_book_id)
+          .select("id, egw_book_id, book_code")
+          .eq("book_code", bookCode)
+          .eq("language", "es")
           .maybeSingle();
 
+        const { data: existingById } = await supabaseClient
+          .from("book_catalog")
+          .select("id, egw_book_id, book_code")
+          .eq("egw_book_id", book.egw_book_id)
+          .eq("language", "es")
+          .maybeSingle();
+
+        const existing = existingByCode || existingById;
+
         if (existing) {
-          // Update existing book
+          // Update existing book - important: update egw_book_id in case it changed in EGW
           const { error: updateError } = await supabaseClient
             .from("book_catalog")
             .update({
+              egw_book_id: book.egw_book_id, // Update ID in case it changed
+              book_code: bookCode, // Ensure book_code is consistent
               title_es: book.title,
               language: 'es',
               folder_id: parseInt(folderId),
               updated_at: new Date().toISOString()
             })
-            .eq("egw_book_id", book.egw_book_id);
+            .eq("id", existing.id);
 
           if (updateError) throw updateError;
           updatedCount++;
+          
+          console.log(`[SCRAPE-CATALOG] Updated book ${bookCode}: egw_book_id ${existing.egw_book_id} -> ${book.egw_book_id}`);
         } else {
           // Insert new book
-          // Generate a book code (first 2-4 chars of title, uppercase)
-          const bookCode = book.title
-            .split(' ')
-            .filter(word => word.length > 2)
-            .slice(0, 2)
-            .map(word => word.charAt(0).toUpperCase())
-            .join('');
-
           const { error: insertError } = await supabaseClient
             .from("book_catalog")
             .insert({
               egw_book_id: book.egw_book_id,
-              book_code: bookCode || `BK${book.egw_book_id}`,
+              book_code: bookCode,
               title_es: book.title,
-              language: 'es', // Always Spanish
+              language: 'es',
               folder_id: parseInt(folderId),
               is_active: false, // New books are inactive by default
               validation_status: 'pending'
             });
 
           if (insertError) {
-            // If unique constraint fails, try updating instead
-            if (insertError.code === '23505') {
-              const { error: retryError } = await supabaseClient
-                .from("book_catalog")
-                .update({
-                  title_es: book.title,
-                  updated_at: new Date().toISOString()
-                })
-                .eq("egw_book_id", book.egw_book_id);
-              
-              if (!retryError) updatedCount++;
-            } else {
-              throw insertError;
-            }
+            throw insertError;
           } else {
             insertedCount++;
+            console.log(`[SCRAPE-CATALOG] Inserted new book ${bookCode}: egw_book_id ${book.egw_book_id}`);
           }
         }
 
         // After catalog update, fetch and store TOC
         try {
-          // Recalculate bookCode for TOC storage
-          const tocBookCode = book.title
-            .split(' ')
-            .filter(word => word.length > 2)
-            .slice(0, 2)
-            .map(word => word.charAt(0).toUpperCase())
-            .join('') || `BK${book.egw_book_id}`;
-
+          // Use the same bookCode calculated above
           const tocUrl = `${baseUrl}/es/book/${book.egw_book_id}.2/toc`;
           console.log(`[SCRAPE-CATALOG] Fetching TOC for ${book.egw_book_id} from ${tocUrl}`);
           
@@ -199,7 +194,7 @@ serve(async (req) => {
               .from('book_toc')
               .upsert({
                 egw_book_id: book.egw_book_id,
-                book_code: tocBookCode,
+                book_code: bookCode,
                 title: book.title,
                 language: 'es',
                 toc_url: tocUrl,
