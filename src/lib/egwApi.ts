@@ -38,8 +38,9 @@ async function loadBookCatalog(): Promise<Map<string, { id: number, title: strin
 
   const { data, error } = await supabase
     .from('book_catalog' as any)
-    .select('book_code, egw_book_id, title_es')
-    .eq('is_active', true); // Only load active books
+    .select('book_code, egw_book_id, title_es, language')
+    .eq('is_active', true)
+    .eq('language', 'es'); // Only load Spanish books
 
   if (error) {
     console.error('❌ Error cargando catálogo de libros:', error);

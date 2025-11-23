@@ -52,7 +52,8 @@ const AdminManualImport = () => {
     try {
       const { data, error } = await supabase
         .from('books')
-        .select('code, title')
+        .select('code, title, language')
+        .eq('language', 'es')
         .order('title');
 
       if (error) throw error;

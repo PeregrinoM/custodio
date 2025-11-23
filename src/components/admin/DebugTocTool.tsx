@@ -16,7 +16,7 @@ interface DebugTocToolProps {
 export function DebugTocTool({ availableBookCodes }: DebugTocToolProps) {
   const [debugHtml, setDebugHtml] = useState<any>(null);
   const [isDebugging, setIsDebugging] = useState(false);
-  const [debugBookId, setDebugBookId] = useState<string>('174');
+  const [debugBookId, setDebugBookId] = useState<string>('');
   const [debugBookCode, setDebugBookCode] = useState<string>('');
   const { toast } = useToast();
 

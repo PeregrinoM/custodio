@@ -103,6 +103,65 @@ export type Database = {
           },
         ]
       }
+      book_toc: {
+        Row: {
+          book_code: string
+          chapters_count: number | null
+          chapters_data: Json | null
+          created_at: string | null
+          egw_book_id: number
+          id: string
+          language: string
+          title: string
+          toc_extracted_at: string | null
+          toc_html: string | null
+          toc_url: string
+          updated_at: string | null
+          validation_error: string | null
+          validation_status: string | null
+        }
+        Insert: {
+          book_code: string
+          chapters_count?: number | null
+          chapters_data?: Json | null
+          created_at?: string | null
+          egw_book_id: number
+          id?: string
+          language?: string
+          title: string
+          toc_extracted_at?: string | null
+          toc_html?: string | null
+          toc_url: string
+          updated_at?: string | null
+          validation_error?: string | null
+          validation_status?: string | null
+        }
+        Update: {
+          book_code?: string
+          chapters_count?: number | null
+          chapters_data?: Json | null
+          created_at?: string | null
+          egw_book_id?: number
+          id?: string
+          language?: string
+          title?: string
+          toc_extracted_at?: string | null
+          toc_html?: string | null
+          toc_url?: string
+          updated_at?: string | null
+          validation_error?: string | null
+          validation_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_book_catalog"
+            columns: ["egw_book_id"]
+            isOneToOne: true
+            referencedRelation: "book_catalog"
+            referencedColumns: ["egw_book_id"]
+          },
+        ]
+      }
       book_versions: {
         Row: {
           book_id: string
