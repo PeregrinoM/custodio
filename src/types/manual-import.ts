@@ -1,7 +1,17 @@
 // Manual Import Types for Historical Versions
 
+export interface ChapterStructure {
+  chapterNumber: number;
+  chapterTitle: string;
+  startIndex: number;
+  endIndex: number;
+  paragraphCount: number;
+  dbChapterId: string | null;
+  dbParagraphCount: number;
+}
+
 export interface ManualImportState {
-  currentPhase: 1 | 2 | 3 | 4 | 5;
+  currentPhase: 1 | 1.5 | 2 | 3 | 4 | 5;
   bookCode: string;
   bookTitle: string;
   versionType: 'regular' | 'physical_baseline';
@@ -12,11 +22,16 @@ export interface ManualImportState {
   uploadedFile: File | null;
   rawParagraphs: string[];
   
+  // Phase 1.5: Chapter detection
+  chapterStructure: ChapterStructure[];
+  
   // Phase 2: Structural comparison
   structuralComparison: StructuralComparison | null;
   
   // Phase 3: Code assignment
   codeAssignments: CodeAssignment[];
+  currentChapter: number;
+  completedChapters: number[];
   
   // Phase 4: Review
   validationErrors: ValidationError[];
@@ -38,6 +53,7 @@ export interface CodeAssignment {
   text: string;
   assignedCode: string; // e.g., "DTG 1.1" or "FALTA"
   status: 'auto' | 'manual' | 'missing' | 'pending';
+  chapterNumber: number; // Which chapter this paragraph belongs to
   confidence?: number; // 0-1 for auto assignments
   suggestedCodes?: Array<{
     code: string;

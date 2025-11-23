@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2, Loader2, Edit2 } from 'lucide-react';
 import { ManualImportState, ValidationError } from '@/types/manual-import';
 import { validateCodeAssignments } from '@/lib/manual-import/validation';
 import { supabase } from '@/integrations/supabase/client';
@@ -72,6 +72,10 @@ export function Phase4Review({ state, onNext, onBack }: Phase4ReviewProps) {
     });
   };
 
+  const handleEditChapter = (chapterNumber: number) => {
+    onNext({ currentChapter: chapterNumber, currentPhase: 3 });
+  };
+
   if (validating) {
     return (
       <Card>
@@ -83,12 +87,26 @@ export function Phase4Review({ state, onNext, onBack }: Phase4ReviewProps) {
     );
   }
 
-  const stats = {
-    total: state.codeAssignments.length,
-    assigned: state.codeAssignments.filter(a => a.assignedCode && a.assignedCode !== 'FALTA').length,
-    missing: state.codeAssignments.filter(a => a.assignedCode === 'FALTA').length,
-    errors: errors.length
-  };
+  const totalAssignments = state.codeAssignments.length;
+  const assignedCount = state.codeAssignments.filter(a => a.assignedCode && a.assignedCode !== 'FALTA').length;
+  const missingCount = state.codeAssignments.filter(a => a.assignedCode === 'FALTA').length;
+
+  // Group stats by chapter
+  const chapterStats = state.chapterStructure.map(chapter => {
+    const chapterAssignments = state.codeAssignments.filter(a => a.chapterNumber === chapter.chapterNumber);
+    const auto = chapterAssignments.filter(a => a.status === 'auto').length;
+    const manual = chapterAssignments.filter(a => a.status === 'manual').length;
+    const falta = chapterAssignments.filter(a => a.assignedCode === 'FALTA').length;
+    
+    return {
+      chapter,
+      total: chapterAssignments.length,
+      auto,
+      manual,
+      falta,
+      autoPercentage: chapterAssignments.length > 0 ? Math.round((auto / chapterAssignments.length) * 100) : 0
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -100,25 +118,19 @@ export function Phase4Review({ state, onNext, onBack }: Phase4ReviewProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Summary Stats */}
-          <div className="grid grid-cols-4 gap-3">
+          {/* Global Summary Stats */}
+          <div className="grid grid-cols-3 gap-3">
             <div className="border rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold">{stats.total}</div>
+              <div className="text-2xl font-bold">{totalAssignments}</div>
               <div className="text-xs text-muted-foreground">Párrafos totales</div>
             </div>
             <div className="border rounded-lg p-3 text-center bg-green-50 dark:bg-green-950">
-              <div className="text-2xl font-bold text-green-600">{stats.assigned}</div>
+              <div className="text-2xl font-bold text-green-600">{assignedCount}</div>
               <div className="text-xs text-muted-foreground">Con código</div>
             </div>
             <div className="border rounded-lg p-3 text-center bg-orange-50 dark:bg-orange-950">
-              <div className="text-2xl font-bold text-orange-600">{stats.missing}</div>
+              <div className="text-2xl font-bold text-orange-600">{missingCount}</div>
               <div className="text-xs text-muted-foreground">Marcados FALTA</div>
-            </div>
-            <div className={`border rounded-lg p-3 text-center ${errors.length > 0 ? 'bg-red-50 dark:bg-red-950' : 'bg-green-50 dark:bg-green-950'}`}>
-              <div className={`text-2xl font-bold ${errors.length > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                {stats.errors}
-              </div>
-              <div className="text-xs text-muted-foreground">Errores</div>
             </div>
           </div>
 
@@ -136,14 +148,14 @@ export function Phase4Review({ state, onNext, onBack }: Phase4ReviewProps) {
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
                 <strong>Se encontraron {errors.length} errores de validación:</strong> Debe corregirlos antes de continuar.
-                Vuelva a la fase anterior para editar los códigos.
+                Puede regresar a capítulos específicos para editar los códigos.
               </AlertDescription>
             </Alert>
           )}
 
           {/* Error List */}
           {errors.length > 0 && (
-            <div className="border rounded-lg divide-y max-h-[300px] overflow-y-auto">
+            <div className="border rounded-lg divide-y max-h-[200px] overflow-y-auto">
               {errors.map((error, index) => (
                 <div key={index} className="p-3 flex items-start gap-3">
                   <Badge variant="destructive" className="mt-0.5">
@@ -162,6 +174,49 @@ export function Phase4Review({ state, onNext, onBack }: Phase4ReviewProps) {
             </div>
           )}
 
+          {/* Chapter-by-Chapter Summary */}
+          <div>
+            <h3 className="font-medium mb-3">Resumen por Capítulo</h3>
+            <div className="border rounded-lg divide-y max-h-[300px] overflow-y-auto">
+              {chapterStats.map((stat, index) => (
+                <div key={index} className="p-4 hover:bg-muted/50 transition-colors">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium">
+                          Capítulo {stat.chapter.chapterNumber}: {stat.chapter.chapterTitle}
+                        </span>
+                        {state.completedChapters.includes(stat.chapter.chapterNumber) && (
+                          <Badge variant="default" className="bg-green-600">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Completado
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground space-y-1">
+                        <div>✅ {stat.total} párrafos asignados</div>
+                        <div>
+                          📊 {stat.auto} automáticos ({stat.autoPercentage}%), {stat.manual} manuales
+                        </div>
+                        {stat.falta > 0 && (
+                          <div className="text-orange-600">⚠️ {stat.falta} marcados como "FALTA"</div>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEditChapter(stat.chapter.chapterNumber)}
+                    >
+                      <Edit2 className="h-3 w-3 mr-1" />
+                      Revisar
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Import Preview */}
           {errors.length === 0 && (
             <div className="bg-muted/50 border rounded-lg p-4 space-y-2">
@@ -170,8 +225,9 @@ export function Phase4Review({ state, onNext, onBack }: Phase4ReviewProps) {
                 <li>• Libro: <strong>{state.bookTitle}</strong> ({state.bookCode})</li>
                 <li>• Tipo: <strong>{state.versionType === 'physical_baseline' ? 'Línea Base Física (LB F)' : 'Versión Regular'}</strong></li>
                 {state.editionDate && <li>• Fecha de edición: <strong>{state.editionDate}</strong></li>}
-                <li>• Párrafos a importar: <strong>{stats.assigned}</strong></li>
-                <li>• Párrafos marcados como FALTA: <strong>{stats.missing}</strong></li>
+                <li>• Capítulos procesados: <strong>{state.chapterStructure.length}</strong></li>
+                <li>• Párrafos a importar: <strong>{assignedCount}</strong></li>
+                <li>• Párrafos marcados como FALTA: <strong>{missingCount}</strong></li>
                 {state.versionType === 'physical_baseline' && (
                   <li className="text-orange-600 dark:text-orange-400">
                     ⚠️ Esta versión será marcada como nueva línea base de referencia
@@ -186,7 +242,7 @@ export function Phase4Review({ state, onNext, onBack }: Phase4ReviewProps) {
       <div className="flex justify-between">
         <Button onClick={onBack} variant="outline">
           <ChevronLeft className="mr-2 h-4 w-4" />
-          Volver a Editar Códigos
+          Volver a Asignación
         </Button>
         <Button onClick={handleNext} size="lg" disabled={errors.length > 0}>
           Proceder a Importación
