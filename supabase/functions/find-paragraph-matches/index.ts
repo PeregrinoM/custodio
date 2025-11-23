@@ -49,10 +49,15 @@ function normalizeText(text: string): string {
 
 // Quick filter: check first 50 chars similarity
 function quickFilter(str1: string, str2: string): boolean {
+  // More aggressive length check first (cheapest operation)
+  const lengthDiff = Math.abs(str1.length - str2.length);
+  const maxLen = Math.max(str1.length, str2.length);
+  if (lengthDiff / maxLen > 0.5) return false; // Skip if length differs by >50%
+  
   const sample1 = str1.substring(0, 50);
   const sample2 = str2.substring(0, 50);
   const quickSim = similarityRatio(sample1, sample2);
-  return quickSim > 0.5; // Only do full comparison if first 50 chars are >50% similar
+  return quickSim > 0.6; // Raised threshold to 60% for better filtering
 }
 
 serve(async (req) => {
@@ -61,7 +66,7 @@ serve(async (req) => {
   }
 
   try {
-    const { bookCode, paragraphs, batchSize = 100 } = await req.json();
+    const { bookCode, paragraphs, chapterNumber, dbChapterId } = await req.json();
 
     if (!bookCode || !Array.isArray(paragraphs)) {
       return new Response(
@@ -71,6 +76,9 @@ serve(async (req) => {
     }
 
     console.log(`Processing ${paragraphs.length} paragraphs for book ${bookCode}`);
+    if (chapterNumber && dbChapterId) {
+      console.log(`Filtering by chapter ${chapterNumber} (chapter_id: ${dbChapterId})`);
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -90,15 +98,23 @@ serve(async (req) => {
       );
     }
 
-    const { data: dbParagraphs } = await supabase
+    // Build query with optional chapter filter
+    let query = supabase
       .from('paragraphs')
       .select('id, refcode_short, base_text, chapter_id, chapters!inner(number, title, book_id)')
       .eq('chapters.book_id', book.id)
       .not('refcode_short', 'is', null);
+    
+    // CRITICAL: Filter by chapter if provided to reduce computational load
+    if (dbChapterId) {
+      query = query.eq('chapter_id', dbChapterId);
+    }
+    
+    const { data: dbParagraphs } = await query;
 
     if (!dbParagraphs || dbParagraphs.length === 0) {
       return new Response(
-        JSON.stringify({ error: 'No paragraphs found for book' }),
+        JSON.stringify({ error: 'No paragraphs found for book/chapter' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -115,8 +131,12 @@ serve(async (req) => {
         return quickFilter(normalizedUploaded, normalizedDb);
       });
 
-      // If no candidates pass quick filter, use all (but this will be rare)
-      const toCompare = candidates.length > 0 ? candidates : dbParagraphs.slice(0, 50);
+      // If no candidates pass quick filter, take top 20 by length similarity
+      const toCompare = candidates.length > 0 ? candidates : 
+        dbParagraphs
+          .map(p => ({ ...p, lengthDiff: Math.abs(p.base_text.length - uploadedText.length) }))
+          .sort((a, b) => a.lengthDiff - b.lengthDiff)
+          .slice(0, 20);
       
       const similarities = toCompare.map(dbPara => ({
         code: dbPara.refcode_short!,
