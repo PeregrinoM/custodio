@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
 import { ChevronLeft, ChevronRight, Loader2, Zap, Edit3, CheckCircle } from 'lucide-react';
 import { ManualImportState, CodeAssignment, ExistingParagraph } from '@/types/manual-import';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,6 +20,7 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
   const [assignments, setAssignments] = useState<CodeAssignment[]>(state.codeAssignments);
   const [loading, setLoading] = useState(false);
   const [autoAssigning, setAutoAssigning] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
 
   useEffect(() => {
     if (assignments.length === 0) {
@@ -38,25 +40,70 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
 
   const handleAutoAssign = async () => {
     setAutoAssigning(true);
+    setProgress({ current: 0, total: state.rawParagraphs.length });
+    
     try {
-      const response = await supabase.functions.invoke('find-paragraph-matches', {
-        body: {
-          bookCode: state.bookCode,
-          paragraphs: state.rawParagraphs
-        }
-      });
+      const BATCH_SIZE = 100;
+      const batches = [];
+      
+      // Split paragraphs into batches
+      for (let i = 0; i < state.rawParagraphs.length; i += BATCH_SIZE) {
+        batches.push(state.rawParagraphs.slice(i, i + BATCH_SIZE));
+      }
 
-      if (response.error) throw response.error;
-
-      const matches = response.data.matches as Array<{
+      console.log(`Processing ${batches.length} batches of ${BATCH_SIZE} paragraphs`);
+      
+      let allMatches: Array<{
         index: number;
         bestMatch: { code: string; similarity: number; text: string } | null;
         suggestions: Array<{ code: string; similarity: number; text: string }>;
-      }>;
+      }> = [];
 
+      // Process each batch
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex];
+        
+        console.log(`Processing batch ${batchIndex + 1}/${batches.length}`);
+        
+        const response = await supabase.functions.invoke('find-paragraph-matches', {
+          body: {
+            bookCode: state.bookCode,
+            paragraphs: batch
+          }
+        });
+
+        if (response.error) throw response.error;
+
+        const batchMatches = response.data.matches as Array<{
+          index: number;
+          bestMatch: { code: string; similarity: number; text: string } | null;
+          suggestions: Array<{ code: string; similarity: number; text: string }>;
+        }>;
+
+        // Adjust indices to account for batch offset
+        const adjustedMatches = batchMatches.map(match => ({
+          ...match,
+          index: match.index + (batchIndex * BATCH_SIZE)
+        }));
+
+        allMatches = allMatches.concat(adjustedMatches);
+        
+        // Update progress
+        setProgress({ 
+          current: (batchIndex + 1) * BATCH_SIZE, 
+          total: state.rawParagraphs.length 
+        });
+
+        // Give UI time to update
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      // Apply all matches to assignments
       const updated = assignments.map((assignment, i) => {
-        const match = matches[i];
-        if (match?.bestMatch && match.bestMatch.similarity > 0.7) {
+        const match = allMatches.find(m => m.index === i);
+        if (!match) return assignment;
+
+        if (match.bestMatch && match.bestMatch.similarity > 0.7) {
           return {
             ...assignment,
             assignedCode: match.bestMatch.code,
@@ -71,21 +118,22 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
         }
         return {
           ...assignment,
-          suggestedCodes: match?.suggestions.map(s => ({
+          suggestedCodes: match.suggestions.map(s => ({
             code: s.code,
             similarity: s.similarity,
             dbText: s.text
-          })) || []
+          }))
         };
       });
 
       setAssignments(updated);
-      toast.success('Asignación automática completada');
+      toast.success(`Asignación automática completada: ${allMatches.length} párrafos procesados`);
     } catch (error) {
       console.error('Error in auto-assign:', error);
       toast.error('Error al realizar la asignación automática');
     } finally {
       setAutoAssigning(false);
+      setProgress({ current: 0, total: 0 });
     }
   };
 
@@ -179,6 +227,22 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
               <div className="text-xs text-muted-foreground">Pendiente</div>
             </div>
           </div>
+
+          {/* Progress Indicator */}
+          {autoAssigning && progress.total > 0 && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Procesando...</span>
+                <span className="font-medium">
+                  {Math.min(progress.current, progress.total)} / {progress.total} párrafos
+                </span>
+              </div>
+              <Progress 
+                value={(progress.current / progress.total) * 100} 
+                className="h-2"
+              />
+            </div>
+          )}
 
           {/* Assignments List */}
           <div className="border rounded-lg divide-y max-h-[500px] overflow-y-auto">
