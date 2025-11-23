@@ -8,6 +8,7 @@ import { Loader2, AlertCircle, FileUp } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { ManualImportState } from '@/types/manual-import';
 import { Phase1Validation } from '@/components/admin/manual-import/Phase1Validation';
+import { Phase1_5ChapterDetection } from '@/components/admin/manual-import/Phase1_5ChapterDetection';
 import { Phase2StructuralComparison } from '@/components/admin/manual-import/Phase2StructuralComparison';
 import { Phase3CodeAssignment } from '@/components/admin/manual-import/Phase3CodeAssignment';
 import { Phase4Review } from '@/components/admin/manual-import/Phase4Review';
@@ -28,8 +29,11 @@ const AdminManualImport = () => {
     versionNotes: '',
     uploadedFile: null,
     rawParagraphs: [],
+    chapterStructure: [],
     structuralComparison: null,
     codeAssignments: [],
+    currentChapter: 1,
+    completedChapters: [],
     validationErrors: [],
     importResult: null
   });
@@ -64,7 +68,7 @@ const AdminManualImport = () => {
     setState(prev => ({ ...prev, ...updates }));
   };
 
-  const goToPhase = (phase: 1 | 2 | 3 | 4 | 5) => {
+  const goToPhase = (phase: 1 | 1.5 | 2 | 3 | 4 | 5) => {
     setState(prev => ({ ...prev, currentPhase: phase }));
   };
 
@@ -78,8 +82,11 @@ const AdminManualImport = () => {
       versionNotes: '',
       uploadedFile: null,
       rawParagraphs: [],
+      chapterStructure: [],
       structuralComparison: null,
       codeAssignments: [],
+      currentChapter: 1,
+      completedChapters: [],
       validationErrors: [],
       importResult: null
     });
@@ -161,11 +168,19 @@ const AdminManualImport = () => {
           />
         )}
 
+        {state.currentPhase === 1.5 && (
+          <Phase1_5ChapterDetection
+            state={state}
+            onNext={updateState}
+            onBack={() => goToPhase(1)}
+          />
+        )}
+
         {state.currentPhase === 2 && (
           <Phase2StructuralComparison
             state={state}
             onNext={updateState}
-            onBack={() => goToPhase(1)}
+            onBack={() => goToPhase(1.5)}
           />
         )}
 

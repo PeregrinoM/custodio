@@ -65,7 +65,7 @@ export function Phase1Validation({ state, availableBooks, onNext }: Phase1Valida
         versionNotes,
         uploadedFile: file,
         rawParagraphs: paragraphs,
-        currentPhase: 2
+        currentPhase: 1.5
       });
     } catch (err) {
       setError('Error al leer el archivo');

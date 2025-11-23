@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { ChevronLeft, ChevronRight, Loader2, Zap, Edit3, CheckCircle } from 'lucide-react';
-import { ManualImportState, CodeAssignment, ExistingParagraph } from '@/types/manual-import';
+import { 
+  ChevronLeft, ChevronRight, Wand2, Loader2, CheckCircle2, 
+  AlertCircle, Lock, Save, ArrowLeft, ArrowRight 
+} from 'lucide-react';
+import { ManualImportState, CodeAssignment } from '@/types/manual-import';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -17,120 +20,114 @@ interface Phase3CodeAssignmentProps {
 }
 
 export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssignmentProps) {
-  const [assignments, setAssignments] = useState<CodeAssignment[]>(state.codeAssignments);
-  const [loading, setLoading] = useState(false);
+  const [assignments, setAssignments] = useState<CodeAssignment[]>([]);
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
 
   useEffect(() => {
-    if (assignments.length === 0) {
-      initializeAssignments();
-    }
-  }, []);
+    initializeAssignments();
+  }, [state.currentChapter]);
 
   const initializeAssignments = () => {
-    const initial: CodeAssignment[] = state.rawParagraphs.map((text, index) => ({
-      index,
-      text,
-      assignedCode: '',
-      status: 'pending'
-    }));
-    setAssignments(initial);
+    if (state.codeAssignments.length > 0) {
+      // Load existing assignments for current chapter
+      const chapterAssignments = state.codeAssignments.filter(
+        a => a.chapterNumber === state.currentChapter
+      );
+      setAssignments(chapterAssignments);
+    } else {
+      // Create new assignments for all chapters
+      const allAssignments: CodeAssignment[] = [];
+      
+      state.chapterStructure.forEach(chapter => {
+        for (let i = chapter.startIndex; i <= chapter.endIndex; i++) {
+          allAssignments.push({
+            index: i,
+            text: state.rawParagraphs[i],
+            assignedCode: '',
+            status: 'pending',
+            chapterNumber: chapter.chapterNumber
+          });
+        }
+      });
+
+      // Filter for current chapter
+      const chapterAssignments = allAssignments.filter(
+        a => a.chapterNumber === state.currentChapter
+      );
+      setAssignments(chapterAssignments);
+      
+      // Save all assignments to state (for other chapters)
+      onNext({ codeAssignments: allAssignments });
+    }
   };
 
-  const handleAutoAssign = async () => {
+  const getCurrentChapter = () => {
+    return state.chapterStructure.find(ch => ch.chapterNumber === state.currentChapter);
+  };
+
+  const handleAutoAssignChapter = async () => {
+    const currentChapter = getCurrentChapter();
+    if (!currentChapter || !currentChapter.dbChapterId) {
+      toast.error('No se encontró el capítulo en la base de datos');
+      return;
+    }
+
     setAutoAssigning(true);
-    setProgress({ current: 0, total: state.rawParagraphs.length });
-    
+    setProgress({ current: 0, total: assignments.length });
+
     try {
-      const BATCH_SIZE = 100;
-      const batches = [];
-      
-      // Split paragraphs into batches
-      for (let i = 0; i < state.rawParagraphs.length; i += BATCH_SIZE) {
-        batches.push(state.rawParagraphs.slice(i, i + BATCH_SIZE));
-      }
+      // Get chapter paragraphs
+      const chapterParagraphs = assignments.map(a => a.text);
 
-      console.log(`Processing ${batches.length} batches of ${BATCH_SIZE} paragraphs`);
-      
-      let allMatches: Array<{
-        index: number;
-        bestMatch: { code: string; similarity: number; text: string } | null;
-        suggestions: Array<{ code: string; similarity: number; text: string }>;
-      }> = [];
+      // Call edge function with chapter filter
+      const { data, error } = await supabase.functions.invoke('find-paragraph-matches', {
+        body: {
+          bookCode: state.bookCode,
+          chapterNumber: state.currentChapter,
+          dbChapterId: currentChapter.dbChapterId,
+          paragraphs: chapterParagraphs
+        }
+      });
 
-      // Process each batch
-      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-        const batch = batches[batchIndex];
-        
-        console.log(`Processing batch ${batchIndex + 1}/${batches.length}`);
-        
-        const response = await supabase.functions.invoke('find-paragraph-matches', {
-          body: {
-            bookCode: state.bookCode,
-            paragraphs: batch
-          }
-        });
+      if (error) throw error;
 
-        if (response.error) throw response.error;
-
-        const batchMatches = response.data.matches as Array<{
-          index: number;
-          bestMatch: { code: string; similarity: number; text: string } | null;
-          suggestions: Array<{ code: string; similarity: number; text: string }>;
-        }>;
-
-        // Adjust indices to account for batch offset
-        const adjustedMatches = batchMatches.map(match => ({
-          ...match,
-          index: match.index + (batchIndex * BATCH_SIZE)
-        }));
-
-        allMatches = allMatches.concat(adjustedMatches);
-        
-        // Update progress
-        setProgress({ 
-          current: (batchIndex + 1) * BATCH_SIZE, 
-          total: state.rawParagraphs.length 
-        });
-
-        // Give UI time to update
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
-      // Apply all matches to assignments
-      const updated = assignments.map((assignment, i) => {
-        const match = allMatches.find(m => m.index === i);
+      // Update assignments with results
+      const updatedAssignments = assignments.map((assignment, index) => {
+        const match = data.results[index];
         if (!match) return assignment;
 
-        if (match.bestMatch && match.bestMatch.similarity > 0.7) {
+        if (match.bestMatch && match.bestMatch.similarity >= 0.5) {
           return {
             ...assignment,
             assignedCode: match.bestMatch.code,
             status: 'auto' as const,
             confidence: match.bestMatch.similarity,
-            suggestedCodes: match.suggestions.map(s => ({
-              code: s.code,
-              similarity: s.similarity,
-              dbText: s.text
-            }))
+            suggestedCodes: match.suggestions
           };
         }
+
         return {
           ...assignment,
-          suggestedCodes: match.suggestions.map(s => ({
-            code: s.code,
-            similarity: s.similarity,
-            dbText: s.text
-          }))
+          suggestedCodes: match.suggestions,
+          status: 'pending' as const
         };
       });
 
-      setAssignments(updated);
-      toast.success(`Asignación automática completada: ${allMatches.length} párrafos procesados`);
+      setAssignments(updatedAssignments);
+
+      // Update global state
+      const allAssignments = state.codeAssignments.map(a => 
+        a.chapterNumber === state.currentChapter
+          ? updatedAssignments.find(ua => ua.index === a.index) || a
+          : a
+      );
+      onNext({ codeAssignments: allAssignments });
+
+      toast.success(`Asignación automática completada para capítulo ${state.currentChapter}`);
     } catch (error) {
       console.error('Error in auto-assign:', error);
-      toast.error('Error al realizar la asignación automática');
+      toast.error('Error al asignar códigos automáticamente');
     } finally {
       setAutoAssigning(false);
       setProgress({ current: 0, total: 0 });
@@ -138,165 +135,292 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
   };
 
   const handleManualEdit = (index: number, code: string) => {
-    const updated = [...assignments];
-    updated[index] = {
-      ...updated[index],
-      assignedCode: code,
-      status: code ? 'manual' : 'pending'
-    };
+    const updated = assignments.map(a => 
+      a.index === index 
+        ? { ...a, assignedCode: code, status: code ? 'manual' as const : 'pending' as const }
+        : a
+    );
     setAssignments(updated);
+
+    // Update global state
+    const allAssignments = state.codeAssignments.map(a => 
+      a.index === index ? updated.find(ua => ua.index === index)! : a
+    );
+    onNext({ codeAssignments: allAssignments });
   };
 
-  const handleUseSuggestion = (index: number, code: string) => {
-    const updated = [...assignments];
-    updated[index] = {
-      ...updated[index],
-      assignedCode: code,
-      status: 'manual'
-    };
+  const handleUseSuggestion = (assignmentIndex: number, code: string) => {
+    const updated = assignments.map((a, i) => 
+      i === assignmentIndex 
+        ? { ...a, assignedCode: code, status: 'manual' as const }
+        : a
+    );
     setAssignments(updated);
+
+    // Update global state
+    const assignment = assignments[assignmentIndex];
+    const allAssignments = state.codeAssignments.map(a => 
+      a.index === assignment.index ? updated[assignmentIndex] : a
+    );
+    onNext({ codeAssignments: allAssignments });
   };
 
-  const handleNext = () => {
-    const pending = assignments.filter(a => a.status === 'pending');
+  const handleCompleteChapter = () => {
+    const pending = assignments.filter(a => !a.assignedCode);
     if (pending.length > 0) {
-      toast.error(`Quedan ${pending.length} párrafos sin asignar código`);
+      toast.error(`Quedan ${pending.length} párrafos sin asignar en este capítulo`);
       return;
     }
 
-    onNext({
-      codeAssignments: assignments,
-      currentPhase: 4
-    });
+    // Mark chapter as completed
+    const newCompletedChapters = [...state.completedChapters, state.currentChapter];
+    
+    // Move to next chapter if available
+    const nextChapter = state.currentChapter + 1;
+    if (nextChapter <= state.chapterStructure.length) {
+      onNext({ 
+        completedChapters: newCompletedChapters,
+        currentChapter: nextChapter
+      });
+      toast.success(`Capítulo ${state.currentChapter} completado. Avanzando al capítulo ${nextChapter}`);
+    } else {
+      // All chapters completed, go to review
+      onNext({ 
+        completedChapters: newCompletedChapters,
+        currentPhase: 4
+      });
+      toast.success('Todos los capítulos completados. Procediendo a revisión final');
+    }
   };
 
+  const handlePreviousChapter = () => {
+    if (state.currentChapter > 1) {
+      onNext({ currentChapter: state.currentChapter - 1 });
+    }
+  };
+
+  const handleNextChapter = () => {
+    if (state.currentChapter < state.chapterStructure.length) {
+      onNext({ currentChapter: state.currentChapter + 1 });
+    }
+  };
+
+  const handleSaveProgress = () => {
+    localStorage.setItem('manual-import-progress', JSON.stringify({
+      bookCode: state.bookCode,
+      versionType: state.versionType,
+      currentChapter: state.currentChapter,
+      completedChapters: state.completedChapters,
+      timestamp: new Date().toISOString()
+    }));
+    toast.success('Progreso guardado');
+  };
+
+  const currentChapter = getCurrentChapter();
   const stats = {
     total: assignments.length,
     auto: assignments.filter(a => a.status === 'auto').length,
     manual: assignments.filter(a => a.status === 'manual').length,
     missing: assignments.filter(a => a.assignedCode === 'FALTA').length,
-    pending: assignments.filter(a => a.status === 'pending').length
+    pending: assignments.filter(a => !a.assignedCode || a.status === 'pending').length
   };
+
+  const isChapterCompleted = state.completedChapters.includes(state.currentChapter);
+  const canAccessChapter = state.currentChapter === 1 || 
+    state.completedChapters.includes(state.currentChapter - 1) ||
+    isChapterCompleted;
+
+  if (!canAccessChapter) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-12 space-y-4">
+          <Lock className="h-12 w-12 text-muted-foreground" />
+          <p className="text-muted-foreground">
+            Complete el capítulo {state.currentChapter - 1} para desbloquear este capítulo
+          </p>
+          <Button onClick={() => onNext({ currentChapter: state.currentChapter - 1 })}>
+            Volver al capítulo {state.currentChapter - 1}
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
+      {/* Chapter Navigation */}
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Fase 3: Asignación de Códigos</CardTitle>
-              <CardDescription>
-                Asigne códigos de referencia a cada párrafo o márquelos como "FALTA"
-              </CardDescription>
-            </div>
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between mb-4">
             <Button
-              onClick={handleAutoAssign}
-              disabled={autoAssigning}
               variant="outline"
+              size="sm"
+              onClick={handlePreviousChapter}
+              disabled={state.currentChapter === 1}
             >
-              {autoAssigning ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Zap className="mr-2 h-4 w-4" />
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Cap. {state.currentChapter - 1}
+            </Button>
+
+            <div className="text-center flex-1">
+              <h2 className="text-2xl font-bold">
+                Capítulo {state.currentChapter}: {currentChapter?.chapterTitle}
+              </h2>
+              {isChapterCompleted && (
+                <Badge variant="default" className="mt-1 bg-green-600">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Completado
+                </Badge>
               )}
-              Asignar Automáticamente
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNextChapter}
+              disabled={state.currentChapter === state.chapterStructure.length}
+            >
+              Cap. {state.currentChapter + 1}
+              <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
           </div>
+
+          {/* Progress Bar */}
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>Progreso del capítulo</span>
+              <span>{stats.total - stats.pending}/{stats.total} asignados ({Math.round((stats.total - stats.pending) / stats.total * 100)}%)</span>
+            </div>
+            <Progress value={(stats.total - stats.pending) / stats.total * 100} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Fase 3: Asignación de Códigos</CardTitle>
+          <CardDescription>
+            Asigne códigos de referencia a cada párrafo del capítulo {state.currentChapter}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Stats */}
-          <div className="grid grid-cols-5 gap-3">
-            <div className="border rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold">{stats.total}</div>
+          <div className="grid grid-cols-5 gap-2">
+            <div className="border rounded-lg p-2 text-center">
+              <div className="text-lg font-bold">{stats.total}</div>
               <div className="text-xs text-muted-foreground">Total</div>
             </div>
-            <div className="border rounded-lg p-3 text-center bg-green-50 dark:bg-green-950">
-              <div className="text-2xl font-bold text-green-600">{stats.auto}</div>
+            <div className="border rounded-lg p-2 text-center bg-blue-50 dark:bg-blue-950">
+              <div className="text-lg font-bold text-blue-600">{stats.auto}</div>
               <div className="text-xs text-muted-foreground">Auto</div>
             </div>
-            <div className="border rounded-lg p-3 text-center bg-blue-50 dark:bg-blue-950">
-              <div className="text-2xl font-bold text-blue-600">{stats.manual}</div>
+            <div className="border rounded-lg p-2 text-center bg-green-50 dark:bg-green-950">
+              <div className="text-lg font-bold text-green-600">{stats.manual}</div>
               <div className="text-xs text-muted-foreground">Manual</div>
             </div>
-            <div className="border rounded-lg p-3 text-center bg-orange-50 dark:bg-orange-950">
-              <div className="text-2xl font-bold text-orange-600">{stats.missing}</div>
+            <div className="border rounded-lg p-2 text-center bg-orange-50 dark:bg-orange-950">
+              <div className="text-lg font-bold text-orange-600">{stats.missing}</div>
               <div className="text-xs text-muted-foreground">FALTA</div>
             </div>
-            <div className="border rounded-lg p-3 text-center bg-gray-50 dark:bg-gray-900">
-              <div className="text-2xl font-bold text-gray-600">{stats.pending}</div>
+            <div className="border rounded-lg p-2 text-center bg-yellow-50 dark:bg-yellow-950">
+              <div className="text-lg font-bold text-yellow-600">{stats.pending}</div>
               <div className="text-xs text-muted-foreground">Pendiente</div>
             </div>
           </div>
 
+          {/* Actions */}
+          <div className="flex gap-2">
+            <Button
+              onClick={handleAutoAssignChapter}
+              disabled={autoAssigning}
+              className="flex-1"
+            >
+              {autoAssigning ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Asignando...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="mr-2 h-4 w-4" />
+                  Auto-asignar Capítulo {state.currentChapter}
+                </>
+              )}
+            </Button>
+            <Button variant="outline" onClick={handleSaveProgress}>
+              <Save className="mr-2 h-4 w-4" />
+              Guardar Progreso
+            </Button>
+          </div>
+
           {/* Progress Indicator */}
           {autoAssigning && progress.total > 0 && (
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Procesando...</span>
-                <span className="font-medium">
-                  {Math.min(progress.current, progress.total)} / {progress.total} párrafos
-                </span>
-              </div>
-              <Progress 
-                value={(progress.current / progress.total) * 100} 
-                className="h-2"
-              />
-            </div>
+            <Alert>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <AlertDescription>
+                Comparando párrafos del capítulo {state.currentChapter}... 
+                Solo se comparan los {progress.total} párrafos de este capítulo contra 
+                los {currentChapter?.dbParagraphCount} párrafos en BD.
+              </AlertDescription>
+            </Alert>
           )}
 
           {/* Assignments List */}
-          <div className="border rounded-lg divide-y max-h-[500px] overflow-y-auto">
+          <div className="space-y-3 max-h-[500px] overflow-y-auto border rounded-lg p-4">
             {assignments.map((assignment, index) => (
-              <div key={index} className="p-4 hover:bg-muted/50">
-                <div className="flex items-start gap-4">
-                  <div className="font-mono text-sm text-muted-foreground min-w-[40px]">
-                    {index + 1}
-                  </div>
-                  <div className="flex-1 space-y-2">
-                    <p className="text-sm line-clamp-2">{assignment.text}</p>
-                    
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={assignment.assignedCode}
-                        onChange={(e) => handleManualEdit(index, e.target.value)}
-                        placeholder="DTG 1.1 o FALTA"
-                        className="max-w-[200px]"
-                      />
-                      
+              <div key={assignment.index} className="border rounded-lg p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge variant="outline">#{index + 1}</Badge>
                       {assignment.status === 'auto' && (
-                        <Badge variant="outline" className="bg-green-50 text-green-700">
-                          <CheckCircle className="mr-1 h-3 w-3" />
-                          Auto {Math.round((assignment.confidence || 0) * 100)}%
-                        </Badge>
+                        <Badge variant="default" className="bg-blue-600">Auto</Badge>
                       )}
-                      
                       {assignment.status === 'manual' && (
-                        <Badge variant="outline" className="bg-blue-50 text-blue-700">
-                          <Edit3 className="mr-1 h-3 w-3" />
-                          Manual
+                        <Badge variant="default" className="bg-green-600">Manual</Badge>
+                      )}
+                      {assignment.assignedCode === 'FALTA' && (
+                        <Badge variant="secondary">FALTA</Badge>
+                      )}
+                      {assignment.confidence && (
+                        <Badge variant="outline">
+                          {Math.round(assignment.confidence * 100)}% similar
                         </Badge>
                       )}
                     </div>
-
-                    {/* Suggestions */}
-                    {assignment.suggestedCodes && assignment.suggestedCodes.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        <span className="text-xs text-muted-foreground">Sugerencias:</span>
-                        {assignment.suggestedCodes.slice(0, 3).map((suggestion, i) => (
-                          <Button
-                            key={i}
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 text-xs"
-                            onClick={() => handleUseSuggestion(index, suggestion.code)}
-                          >
-                            {suggestion.code} ({Math.round(suggestion.similarity * 100)}%)
-                          </Button>
-                        ))}
-                      </div>
-                    )}
+                    <p className="text-sm text-muted-foreground line-clamp-3">
+                      {assignment.text}
+                    </p>
+                  </div>
+                  <div className="w-48">
+                    <Input
+                      value={assignment.assignedCode}
+                      onChange={(e) => handleManualEdit(assignment.index, e.target.value)}
+                      placeholder="Ej: CC 1.1 o FALTA"
+                      className="font-mono text-sm"
+                    />
                   </div>
                 </div>
+
+                {/* Suggestions */}
+                {assignment.suggestedCodes && assignment.suggestedCodes.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground">Sugerencias:</div>
+                    <div className="flex flex-wrap gap-1">
+                      {assignment.suggestedCodes.slice(0, 5).map((suggestion, i) => (
+                        <Button
+                          key={i}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleUseSuggestion(index, suggestion.code)}
+                          className="text-xs h-7"
+                        >
+                          {suggestion.code} ({Math.round(suggestion.similarity * 100)}%)
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -308,9 +432,18 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
           <ChevronLeft className="mr-2 h-4 w-4" />
           Volver
         </Button>
-        <Button onClick={handleNext} size="lg" disabled={stats.pending > 0}>
-          Continuar a Revisión Final
-          <ChevronRight className="ml-2 h-4 w-4" />
+        <Button onClick={handleCompleteChapter} size="lg" disabled={stats.pending > 0}>
+          {state.currentChapter < state.chapterStructure.length ? (
+            <>
+              Completar Capítulo {state.currentChapter}
+              <ChevronRight className="ml-2 h-4 w-4" />
+            </>
+          ) : (
+            <>
+              Finalizar y Revisar
+              <CheckCircle2 className="ml-2 h-4 w-4" />
+            </>
+          )}
         </Button>
       </div>
     </div>
