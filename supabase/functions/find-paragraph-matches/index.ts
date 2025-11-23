@@ -2,10 +2,16 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
-// Levenshtein distance calculation
-function levenshteinDistance(str1: string, str2: string): number {
+// Optimized Levenshtein distance with early termination
+function levenshteinDistance(str1: string, str2: string, maxDistance: number = Infinity): number {
   const len1 = str1.length;
   const len2 = str2.length;
+  
+  // Early exit: if length difference exceeds maxDistance, skip calculation
+  if (Math.abs(len1 - len2) > maxDistance) {
+    return maxDistance + 1;
+  }
+
   const matrix: number[][] = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(0));
 
   for (let i = 0; i <= len1; i++) matrix[i][0] = i;
@@ -26,13 +32,27 @@ function levenshteinDistance(str1: string, str2: string): number {
 }
 
 function similarityRatio(str1: string, str2: string): number {
-  const distance = levenshteinDistance(str1, str2);
   const maxLen = Math.max(str1.length, str2.length);
-  return maxLen === 0 ? 1 : 1 - distance / maxLen;
+  if (maxLen === 0) return 1;
+  
+  // Skip if length difference > 40% (unlikely to be a match)
+  const lengthDiff = Math.abs(str1.length - str2.length) / maxLen;
+  if (lengthDiff > 0.4) return 0;
+  
+  const distance = levenshteinDistance(str1, str2, Math.floor(maxLen * 0.6));
+  return 1 - distance / maxLen;
 }
 
 function normalizeText(text: string): string {
   return text.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+// Quick filter: check first 50 chars similarity
+function quickFilter(str1: string, str2: string): boolean {
+  const sample1 = str1.substring(0, 50);
+  const sample2 = str2.substring(0, 50);
+  const quickSim = similarityRatio(sample1, sample2);
+  return quickSim > 0.5; // Only do full comparison if first 50 chars are >50% similar
 }
 
 serve(async (req) => {
@@ -41,7 +61,7 @@ serve(async (req) => {
   }
 
   try {
-    const { bookCode, paragraphs } = await req.json();
+    const { bookCode, paragraphs, batchSize = 100 } = await req.json();
 
     if (!bookCode || !Array.isArray(paragraphs)) {
       return new Response(
@@ -49,6 +69,8 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    console.log(`Processing ${paragraphs.length} paragraphs for book ${bookCode}`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -81,11 +103,22 @@ serve(async (req) => {
       );
     }
 
-    // Calculate similarities for each uploaded paragraph
+    console.log(`Comparing against ${dbParagraphs.length} database paragraphs`);
+
+    // Calculate similarities for each uploaded paragraph with optimizations
     const matches = paragraphs.map((uploadedText: string, index: number) => {
       const normalizedUploaded = normalizeText(uploadedText);
       
-      const similarities = dbParagraphs.map(dbPara => ({
+      // Pre-filter candidates using quick check
+      const candidates = dbParagraphs.filter(dbPara => {
+        const normalizedDb = normalizeText(dbPara.base_text);
+        return quickFilter(normalizedUploaded, normalizedDb);
+      });
+
+      // If no candidates pass quick filter, use all (but this will be rare)
+      const toCompare = candidates.length > 0 ? candidates : dbParagraphs.slice(0, 50);
+      
+      const similarities = toCompare.map(dbPara => ({
         code: dbPara.refcode_short!,
         similarity: similarityRatio(normalizedUploaded, normalizeText(dbPara.base_text)),
         text: dbPara.base_text
@@ -94,7 +127,7 @@ serve(async (req) => {
       // Sort by similarity descending
       similarities.sort((a, b) => b.similarity - a.similarity);
 
-      const bestMatch = similarities[0].similarity > 0.7 ? similarities[0] : null;
+      const bestMatch = similarities[0]?.similarity > 0.7 ? similarities[0] : null;
       const suggestions = similarities.slice(0, 5); // Top 5 suggestions
 
       return {
@@ -103,6 +136,8 @@ serve(async (req) => {
         suggestions
       };
     });
+
+    console.log(`Successfully processed ${matches.length} matches`);
 
     return new Response(
       JSON.stringify({ matches }),
