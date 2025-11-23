@@ -6,9 +6,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Upload, FileText, AlertCircle } from 'lucide-react';
+import { Upload, FileText, AlertCircle, Loader2, CheckCircle2, BookOpen, Search } from 'lucide-react';
 import { extractParagraphsFromText } from '@/lib/manual-import/validation';
 import { ManualImportState } from '@/types/manual-import';
+import { detectTableOfContents, findChapterBoundariesFromTOC } from '@/lib/manual-import/toc-detection';
+import { detectChaptersAdvanced, mapChaptersToDatabase } from '@/lib/manual-import/chapter-detection';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Phase1ValidationProps {
   state: ManualImportState;
@@ -23,6 +26,12 @@ export function Phase1Validation({ state, availableBooks, onNext }: Phase1Valida
   const [versionNotes, setVersionNotes] = useState(state.versionNotes);
   const [file, setFile] = useState<File | null>(state.uploadedFile);
   const [error, setError] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [detectionPreview, setDetectionPreview] = useState<{
+    chaptersDetected: number;
+    tocFound: boolean;
+    method: 'toc' | 'pattern';
+  } | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -46,30 +55,87 @@ export function Phase1Validation({ state, availableBooks, onNext }: Phase1Valida
       return;
     }
 
+    setIsProcessing(true);
+    setError('');
+    
     try {
       const content = await file.text();
       const paragraphs = extractParagraphsFromText(content);
 
       if (paragraphs.length === 0) {
         setError('El archivo no contiene párrafos válidos');
+        setIsProcessing(false);
         return;
       }
 
+      console.log(`📄 Archivo cargado: ${paragraphs.length} párrafos`);
+
+      // ====== DETECCIÓN AUTOMÁTICA DE CAPÍTULOS ======
+      
+      // Paso 1: Intentar detectar índice/tabla de contenidos
+      const tocResult = detectTableOfContents(paragraphs);
+      let chapters = [];
+      let detectionMethod: 'toc' | 'pattern' = 'pattern';
+
+      if (tocResult.found && tocResult.entries.length >= 3) {
+        // Usar índice para encontrar capítulos
+        console.log(`✓ Índice detectado con ${tocResult.entries.length} capítulos`);
+        chapters = findChapterBoundariesFromTOC(paragraphs, tocResult.entries, tocResult.tocEndIndex);
+        detectionMethod = 'toc';
+      } else {
+        // Usar detección por patrones avanzados
+        console.log('⚠ No se encontró índice, usando detección por patrones avanzados');
+        const startFrom = tocResult.tocEndIndex > 0 ? tocResult.tocEndIndex + 1 : 0;
+        chapters = detectChaptersAdvanced(paragraphs, startFrom);
+      }
+
+      console.log(`📚 ${chapters.length} capítulos detectados mediante ${detectionMethod === 'toc' ? 'índice' : 'patrones'}`);
+
+      // Mapear a BD (obtener book ID)
+      const { data: book, error: bookError } = await supabase
+        .from('books')
+        .select('id')
+        .eq('code', bookCode)
+        .single();
+
+      if (bookError || !book) {
+        setError('No se pudo encontrar el libro en la base de datos');
+        setIsProcessing(false);
+        return;
+      }
+
+      // Mapear capítulos a BD
+      const mappedChapters = await mapChaptersToDatabase(chapters, book.id, supabase);
+
+      // Mostrar preview de detección
+      setDetectionPreview({
+        chaptersDetected: mappedChapters.length,
+        tocFound: tocResult.found,
+        method: detectionMethod
+      });
+
       const bookTitle = availableBooks.find(b => b.code === bookCode)?.title || bookCode;
 
-      onNext({
-        bookCode,
-        bookTitle,
-        versionType,
-        editionDate: editionDate || null,
-        versionNotes,
-        uploadedFile: file,
-        rawParagraphs: paragraphs,
-        currentPhase: 1.5
-      });
+      // Avanzar directamente a Fase 2 (saltar Fase 1.5)
+      setTimeout(() => {
+        onNext({
+          bookCode,
+          bookTitle,
+          versionType,
+          editionDate: editionDate || null,
+          versionNotes,
+          uploadedFile: file,
+          rawParagraphs: paragraphs,
+          chapterStructure: mappedChapters,
+          detectionMethod,
+          currentPhase: 2  // ← Directamente a Fase 2
+        });
+      }, 1500);
+
     } catch (err) {
-      setError('Error al leer el archivo');
+      setError('Error al procesar el archivo');
       console.error(err);
+      setIsProcessing(false);
     }
   };
 
@@ -166,6 +232,41 @@ export function Phase1Validation({ state, availableBooks, onNext }: Phase1Valida
             </p>
           </div>
 
+          {isProcessing && (
+            <Alert>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <AlertDescription>
+                <div className="space-y-2">
+                  <p className="font-medium">Analizando estructura del archivo...</p>
+                  <div className="text-sm text-muted-foreground space-y-1">
+                    <p>• Buscando tabla de contenidos...</p>
+                    <p>• Detectando límites de capítulos...</p>
+                    <p>• Comparando con base de datos...</p>
+                  </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {detectionPreview && !isProcessing && (
+            <Alert>
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertDescription>
+                <p className="font-medium mb-2">✓ Estructura detectada correctamente</p>
+                <ul className="text-sm space-y-1">
+                  <li className="flex items-center gap-2">
+                    {detectionPreview.method === 'toc' ? (
+                      <><BookOpen className="h-3 w-3" /> Índice automático detectado</>
+                    ) : (
+                      <><Search className="h-3 w-3" /> Detección por patrones avanzados</>
+                    )}
+                  </li>
+                  <li>📚 {detectionPreview.chaptersDetected} capítulos encontrados</li>
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
@@ -176,9 +277,18 @@ export function Phase1Validation({ state, availableBooks, onNext }: Phase1Valida
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={handleNext} size="lg">
-          <Upload className="mr-2 h-4 w-4" />
-          Continuar a Comparación Estructural
+        <Button onClick={handleNext} size="lg" disabled={isProcessing}>
+          {isProcessing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Detectando capítulos...
+            </>
+          ) : (
+            <>
+              <Upload className="mr-2 h-4 w-4" />
+              Analizar y Continuar
+            </>
+          )}
         </Button>
       </div>
     </div>

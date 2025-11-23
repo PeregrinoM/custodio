@@ -17,6 +17,7 @@ export interface ManualImportState {
   versionType: 'regular' | 'physical_baseline';
   editionDate: string | null;
   versionNotes: string;
+  detectionMethod?: 'toc' | 'pattern';
   
   // Phase 1: File upload
   uploadedFile: File | null;

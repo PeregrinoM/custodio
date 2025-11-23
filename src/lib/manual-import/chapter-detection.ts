@@ -1,40 +1,87 @@
 import { ChapterStructure } from '@/types/manual-import';
 
 /**
- * Detects chapter boundaries in text content
+ * Advanced chapter detection with improved patterns and context validation
  */
-export function detectChapters(paragraphs: string[]): ChapterStructure[] {
+export function detectChaptersAdvanced(paragraphs: string[], startFrom: number = 0): ChapterStructure[] {
   const chapters: ChapterStructure[] = [];
   let currentChapter = 1;
-  let chapterStartIndex = 0;
+  let chapterStartIndex = startFrom;
 
-  paragraphs.forEach((para, index) => {
-    const trimmed = para.trim();
-    
-    // Check for chapter patterns
-    const isChapterMarker = 
-      /^cap[ií]tulo\s+\d+/i.test(trimmed) ||
-      /^chapter\s+\d+/i.test(trimmed) ||
-      /^cap\.\s*\d+/i.test(trimmed) ||
-      /^\d+\.\s*[A-ZÁÉÍÓÚ]/i.test(trimmed) || // "1. Título"
-      (trimmed.length < 100 && trimmed === trimmed.toUpperCase() && trimmed.length > 10); // ALL CAPS TITLES
+  const chapterPatterns = [
+    /^cap[ií]tulo\s*\d+/i,           // "Capitulo 1", "Capítulo 10"
+    /^cap\.\s*\d+/i,                 // "Cap. 1", "Cap.10"
+    /^cap\d+/i,                      // "Cap1", "Cap10"
+    /^chapter\s*\d+/i,               // "Chapter 1", "Chapter10"
+    /^ch\.\s*\d+/i,                  // "Ch. 1"
+    /^\d+\.\s*[A-ZÁÉÍÓÚÑ]/,          // "1. Título Con Mayúscula"
+    /^\d+\s*\-\s*[A-ZÁÉÍÓÚÑ]/,       // "1 - Título"
+    /^\d+\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]/, // "1 Título"
+  ];
 
-    if (isChapterMarker && index > chapterStartIndex) {
-      // Save previous chapter
-      chapters.push({
-        chapterNumber: currentChapter,
-        chapterTitle: extractChapterTitle(paragraphs[chapterStartIndex]),
-        startIndex: chapterStartIndex,
-        endIndex: index - 1,
-        paragraphCount: index - chapterStartIndex,
-        dbChapterId: null,
-        dbParagraphCount: 0
-      });
+  const separatorPatterns = [
+    /^={5,}$/,  // "======"
+    /^\*{5,}$/, // "******"
+    /^-{5,}$/   // "------"
+  ];
 
-      currentChapter++;
-      chapterStartIndex = index;
+  for (let i = startFrom; i < paragraphs.length; i++) {
+    const para = paragraphs[i].trim();
+    const nextPara = paragraphs[i + 1]?.trim() || '';
+    const prevPara = paragraphs[i - 1]?.trim() || '';
+
+    let isChapterMarker = false;
+    let chapterTitle = '';
+
+    // Check direct chapter patterns
+    for (const pattern of chapterPatterns) {
+      if (pattern.test(para)) {
+        isChapterMarker = true;
+        chapterTitle = extractChapterTitle(para);
+        break;
+      }
     }
-  });
+
+    // Check all-caps titles (between 10-100 chars)
+    if (!isChapterMarker && para.length >= 10 && para.length <= 100 && para === para.toUpperCase() && /^[A-ZÁÉÍÓÚÑ\s]+$/.test(para)) {
+      isChapterMarker = true;
+      chapterTitle = para;
+    }
+
+    // Check separator + title pattern
+    if (!isChapterMarker) {
+      for (const sepPattern of separatorPatterns) {
+        if (sepPattern.test(para) && nextPara.length > 0 && nextPara.length < 150) {
+          isChapterMarker = true;
+          chapterTitle = nextPara;
+          i++; // Skip next paragraph (it's the title)
+          break;
+        }
+      }
+    }
+
+    // Validate with context: next paragraphs should look like content
+    if (isChapterMarker && i > chapterStartIndex) {
+      const nextContent = paragraphs.slice(i + 1, i + 4);
+      const looksLikeContent = nextContent.some(p => p.trim().length > 150); // At least one paragraph is substantial
+
+      if (looksLikeContent) {
+        // Save previous chapter
+        chapters.push({
+          chapterNumber: currentChapter,
+          chapterTitle: chapters.length > 0 ? chapters[currentChapter - 2]?.chapterTitle || extractChapterTitle(paragraphs[chapterStartIndex]) : extractChapterTitle(paragraphs[chapterStartIndex]),
+          startIndex: chapterStartIndex,
+          endIndex: i - 1,
+          paragraphCount: i - chapterStartIndex,
+          dbChapterId: null,
+          dbParagraphCount: 0
+        });
+
+        currentChapter++;
+        chapterStartIndex = i;
+      }
+    }
+  }
 
   // Add last chapter
   if (chapterStartIndex < paragraphs.length) {
@@ -50,6 +97,13 @@ export function detectChapters(paragraphs: string[]): ChapterStructure[] {
   }
 
   return chapters;
+}
+
+/**
+ * Legacy detection function (kept for compatibility)
+ */
+export function detectChapters(paragraphs: string[]): ChapterStructure[] {
+  return detectChaptersAdvanced(paragraphs, 0);
 }
 
 /**

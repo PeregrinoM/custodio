@@ -180,7 +180,7 @@ const AdminManualImport = () => {
           <Phase2StructuralComparison
             state={state}
             onNext={updateState}
-            onBack={() => goToPhase(1.5)}
+            onBack={() => goToPhase(1)}
           />
         )}
 
