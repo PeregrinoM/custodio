@@ -12,6 +12,7 @@ import {
 import { ManualImportState, CodeAssignment } from '@/types/manual-import';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { ReferencePanel } from './ReferencePanel';
 
 interface Phase3CodeAssignmentProps {
   state: ManualImportState;
@@ -23,9 +24,16 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
   const [assignments, setAssignments] = useState<CodeAssignment[]>([]);
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [dbParagraphs, setDbParagraphs] = useState<Array<{
+    id: string;
+    refcode_short: string;
+    paragraph_number: number;
+    base_text: string;
+  }>>([]);
 
   useEffect(() => {
     initializeAssignments();
+    loadChapterParagraphsFromDB();
   }, [state.currentChapter]);
 
   const initializeAssignments = () => {
@@ -64,6 +72,26 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
 
   const getCurrentChapter = () => {
     return state.chapterStructure.find(ch => ch.chapterNumber === state.currentChapter);
+  };
+
+  const loadChapterParagraphsFromDB = async () => {
+    const currentChapter = getCurrentChapter();
+    if (!currentChapter?.dbChapterId) {
+      setDbParagraphs([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('paragraphs')
+      .select('id, refcode_short, paragraph_number, base_text')
+      .eq('chapter_id', currentChapter.dbChapterId)
+      .order('paragraph_number');
+
+    if (data && !error) {
+      setDbParagraphs(data);
+    } else {
+      setDbParagraphs([]);
+    }
   };
 
   const handleAutoAssignChapter = async () => {
@@ -388,6 +416,12 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
               Guardar Progreso
             </Button>
           </div>
+
+          {/* Reference Panel */}
+          <ReferencePanel 
+            paragraphs={dbParagraphs}
+            chapterNumber={state.currentChapter}
+          />
 
           {/* Progress Indicator */}
           {autoAssigning && progress.total > 0 && (
