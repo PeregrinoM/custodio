@@ -29,13 +29,16 @@ export function Phase5Import({ state, onBack, onReset }: Phase5ImportProps) {
       setProgress(30);
 
       // Call edge function for transactional import
+      // Filter out discarded paragraphs before importing
+      const assignmentsToImport = state.codeAssignments.filter(a => !a.discarded);
+      
       const response = await supabase.functions.invoke('import-manual-version', {
         body: {
           bookCode: state.bookCode,
           versionType: state.versionType,
           editionDate: state.editionDate,
           versionNotes: state.versionNotes,
-          assignments: state.codeAssignments
+          assignments: assignmentsToImport
         }
       });
 
@@ -98,7 +101,7 @@ export function Phase5Import({ state, onBack, onReset }: Phase5ImportProps) {
                 <p className="font-medium text-sm">Se realizarán las siguientes operaciones:</p>
                 <ul className="text-sm text-muted-foreground space-y-1">
                   <li>1. Crear registro de book_version</li>
-                  <li>2. Crear {state.codeAssignments.filter(a => a.assignedCode !== 'FALTA').length} snapshots de párrafos</li>
+                  <li>2. Crear {state.codeAssignments.filter(a => a.assignedCode !== 'FALTA' && !a.discarded).length} snapshots de párrafos</li>
                   {state.versionType === 'physical_baseline' && (
                     <li className="text-orange-600 dark:text-orange-400">
                       3. Establecer como nueva línea base (baseline)

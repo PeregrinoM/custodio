@@ -52,9 +52,10 @@ export interface CodeAssignment {
   index: number; // 0-based index in uploaded file
   text: string;
   assignedCode: string; // e.g., "DTG 1.1" or "FALTA"
-  status: 'auto' | 'manual' | 'missing' | 'pending';
+  status: 'auto' | 'manual' | 'missing' | 'pending' | 'discarded';
   chapterNumber: number; // Which chapter this paragraph belongs to
   confidence?: number; // 0-1 for auto assignments
+  discarded?: boolean; // Mark as not a real paragraph (header, metadata, etc.)
   suggestedCodes?: Array<{
     code: string;
     similarity: number;

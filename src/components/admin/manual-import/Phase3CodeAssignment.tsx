@@ -77,8 +77,8 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
     setProgress({ current: 0, total: assignments.length });
 
     try {
-      // Get chapter paragraphs
-      const chapterParagraphs = assignments.map(a => a.text);
+      // Get chapter paragraphs (excluding discarded ones)
+      const chapterParagraphs = assignments.filter(a => !a.discarded).map(a => a.text);
 
       // Call edge function with chapter filter
       const { data, error } = await supabase.functions.invoke('find-paragraph-matches', {
@@ -92,9 +92,12 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
 
       if (error) throw error;
 
-      // Update assignments with results
-      const updatedAssignments = assignments.map((assignment, index) => {
-        const match = data.results[index];
+      // Update assignments with results (only for non-discarded)
+      let resultIndex = 0;
+      const updatedAssignments = assignments.map((assignment) => {
+        if (assignment.discarded) return assignment;
+        
+        const match = data.results[resultIndex++];
         if (!match) return assignment;
 
         if (match.bestMatch && match.bestMatch.similarity >= 0.5) {
@@ -165,8 +168,36 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
     onNext({ codeAssignments: allAssignments });
   };
 
+  const handleToggleDiscard = (index: number) => {
+    const updated = assignments.map(a => {
+      if (a.index === index) {
+        const willDiscard = !a.discarded;
+        return {
+          ...a, 
+          discarded: willDiscard, 
+          status: willDiscard ? ('discarded' as const) : ('pending' as const),
+          assignedCode: willDiscard ? '' : a.assignedCode
+        };
+      }
+      return a;
+    });
+    setAssignments(updated);
+
+    // Update global state
+    const allAssignments = state.codeAssignments.map(a => 
+      a.index === index ? updated.find(ua => ua.index === index)! : a
+    );
+    onNext({ codeAssignments: allAssignments });
+    
+    const wasDiscarded = updated.find(u => u.index === index)?.discarded;
+    toast.success(wasDiscarded 
+      ? 'Párrafo descartado como no-contenido' 
+      : 'Párrafo restaurado'
+    );
+  };
+
   const handleCompleteChapter = () => {
-    const pending = assignments.filter(a => !a.assignedCode);
+    const pending = assignments.filter(a => !a.assignedCode && !a.discarded);
     if (pending.length > 0) {
       toast.error(`Quedan ${pending.length} párrafos sin asignar en este capítulo`);
       return;
@@ -222,7 +253,8 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
     auto: assignments.filter(a => a.status === 'auto').length,
     manual: assignments.filter(a => a.status === 'manual').length,
     missing: assignments.filter(a => a.assignedCode === 'FALTA').length,
-    pending: assignments.filter(a => !a.assignedCode || a.status === 'pending').length
+    discarded: assignments.filter(a => a.discarded).length,
+    pending: assignments.filter(a => !a.assignedCode && !a.discarded).length
   };
 
   const isChapterCompleted = state.completedChapters.includes(state.currentChapter);
@@ -305,7 +337,7 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Stats */}
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-6 gap-2">
             <div className="border rounded-lg p-2 text-center">
               <div className="text-lg font-bold">{stats.total}</div>
               <div className="text-xs text-muted-foreground">Total</div>
@@ -321,6 +353,10 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
             <div className="border rounded-lg p-2 text-center bg-orange-50 dark:bg-orange-950">
               <div className="text-lg font-bold text-orange-600">{stats.missing}</div>
               <div className="text-xs text-muted-foreground">FALTA</div>
+            </div>
+            <div className="border rounded-lg p-2 text-center bg-gray-50 dark:bg-gray-950">
+              <div className="text-lg font-bold text-gray-600">{stats.discarded}</div>
+              <div className="text-xs text-muted-foreground">Descartado</div>
             </div>
             <div className="border rounded-lg p-2 text-center bg-yellow-50 dark:bg-yellow-950">
               <div className="text-lg font-bold text-yellow-600">{stats.pending}</div>
@@ -368,21 +404,29 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
           {/* Assignments List */}
           <div className="space-y-3 max-h-[500px] overflow-y-auto border rounded-lg p-4">
             {assignments.map((assignment, index) => (
-              <div key={assignment.index} className="border rounded-lg p-4 space-y-3">
+              <div 
+                key={assignment.index} 
+                className={`border rounded-lg p-4 space-y-3 transition-opacity ${
+                  assignment.discarded ? 'opacity-50 bg-muted/30' : ''
+                }`}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <Badge variant="outline">#{index + 1}</Badge>
-                      {assignment.status === 'auto' && (
+                      {assignment.discarded && (
+                        <Badge variant="secondary" className="bg-gray-600">Descartado</Badge>
+                      )}
+                      {!assignment.discarded && assignment.status === 'auto' && (
                         <Badge variant="default" className="bg-blue-600">Auto</Badge>
                       )}
-                      {assignment.status === 'manual' && (
+                      {!assignment.discarded && assignment.status === 'manual' && (
                         <Badge variant="default" className="bg-green-600">Manual</Badge>
                       )}
-                      {assignment.assignedCode === 'FALTA' && (
+                      {!assignment.discarded && assignment.assignedCode === 'FALTA' && (
                         <Badge variant="secondary">FALTA</Badge>
                       )}
-                      {assignment.confidence && (
+                      {!assignment.discarded && assignment.confidence && (
                         <Badge variant="outline">
                           {Math.round(assignment.confidence * 100)}% similar
                         </Badge>
@@ -392,18 +436,28 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
                       {assignment.text}
                     </p>
                   </div>
-                  <div className="w-48">
-                    <Input
-                      value={assignment.assignedCode}
-                      onChange={(e) => handleManualEdit(assignment.index, e.target.value)}
-                      placeholder="Ej: CC 1.1 o FALTA"
-                      className="font-mono text-sm"
-                    />
+                  <div className="flex flex-col gap-2 w-48">
+                    <Button
+                      variant={assignment.discarded ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleToggleDiscard(assignment.index)}
+                      className="w-full"
+                    >
+                      {assignment.discarded ? 'Restaurar' : 'Descartar'}
+                    </Button>
+                    {!assignment.discarded && (
+                      <Input
+                        value={assignment.assignedCode}
+                        onChange={(e) => handleManualEdit(assignment.index, e.target.value)}
+                        placeholder="Ej: CC 1.1 o FALTA"
+                        className="font-mono text-sm"
+                      />
+                    )}
                   </div>
                 </div>
 
                 {/* Suggestions */}
-                {assignment.suggestedCodes && assignment.suggestedCodes.length > 0 && (
+                {!assignment.discarded && assignment.suggestedCodes && assignment.suggestedCodes.length > 0 && (
                   <div className="space-y-1">
                     <div className="text-xs text-muted-foreground">Sugerencias:</div>
                     <div className="flex flex-wrap gap-1">
