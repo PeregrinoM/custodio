@@ -47,6 +47,7 @@ export const BookCatalogManager = () => {
       const { data, error } = await supabase
         .from("book_catalog" as any)
         .select("*")
+        .eq("language", "es")
         .order("book_code");
 
       if (error) throw error;
