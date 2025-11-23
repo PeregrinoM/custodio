@@ -94,8 +94,9 @@ export function Phase1Validation({ state, availableBooks, onNext }: Phase1Valida
       // Mapear a BD (obtener book ID)
       const { data: book, error: bookError } = await supabase
         .from('books')
-        .select('id')
+        .select('id, language')
         .eq('code', bookCode)
+        .eq('language', 'es')
         .single();
 
       if (bookError || !book) {

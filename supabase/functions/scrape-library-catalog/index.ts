@@ -88,6 +88,8 @@ serve(async (req) => {
     let insertedCount = 0;
     let updatedCount = 0;
     let errorCount = 0;
+    let tocUpdatedCount = 0;
+    let tocErrorCount = 0;
 
     for (const book of uniqueBooks) {
       try {
@@ -153,6 +155,84 @@ serve(async (req) => {
             insertedCount++;
           }
         }
+
+        // After catalog update, fetch and store TOC
+        try {
+          // Recalculate bookCode for TOC storage
+          const tocBookCode = book.title
+            .split(' ')
+            .filter(word => word.length > 2)
+            .slice(0, 2)
+            .map(word => word.charAt(0).toUpperCase())
+            .join('') || `BK${book.egw_book_id}`;
+
+          const tocUrl = `${baseUrl}/es/book/${book.egw_book_id}.2/toc`;
+          console.log(`[SCRAPE-CATALOG] Fetching TOC for ${book.egw_book_id} from ${tocUrl}`);
+          
+          const tocResponse = await fetch(tocUrl, {
+            headers: { 'User-Agent': 'EGW-Monitor/1.0' }
+          });
+
+          if (tocResponse.ok) {
+            const tocHtml = await tocResponse.text();
+            
+            // Parse chapters from TOC
+            const chapterPattern = /<a[^>]*href="\/es\/book\/\d+\.(\d+)"[^>]*>([^<]+)<\/a>/g;
+            const chapters: Array<{ number: number; title: string }> = [];
+            let chapterMatch;
+            
+            while ((chapterMatch = chapterPattern.exec(tocHtml)) !== null) {
+              const chapterNum = parseInt(chapterMatch[1]);
+              const chapterTitle = chapterMatch[2].trim();
+              
+              // Skip TOC itself (usually chapter 2) and invalid entries
+              if (chapterNum > 2 && chapterTitle.length > 2) {
+                chapters.push({
+                  number: chapterNum,
+                  title: chapterTitle
+                });
+              }
+            }
+
+            // Upsert TOC data
+            const { error: tocError } = await supabaseClient
+              .from('book_toc')
+              .upsert({
+                egw_book_id: book.egw_book_id,
+                book_code: tocBookCode,
+                title: book.title,
+                language: 'es',
+                toc_url: tocUrl,
+                toc_html: tocHtml.substring(0, 50000), // Store first 50KB
+                toc_extracted_at: new Date().toISOString(),
+                chapters_count: chapters.length,
+                chapters_data: chapters,
+                validation_status: chapters.length > 0 ? 'success' : 'warning',
+                validation_error: chapters.length === 0 ? 'No chapters found in TOC' : null,
+                updated_at: new Date().toISOString()
+              }, {
+                onConflict: 'egw_book_id'
+              });
+
+            if (tocError) {
+              console.error(`[SCRAPE-CATALOG] Error storing TOC for ${book.egw_book_id}:`, tocError);
+              tocErrorCount++;
+            } else {
+              console.log(`[SCRAPE-CATALOG] TOC stored for ${book.egw_book_id}: ${chapters.length} chapters`);
+              tocUpdatedCount++;
+            }
+          } else {
+            console.warn(`[SCRAPE-CATALOG] Failed to fetch TOC for ${book.egw_book_id}: ${tocResponse.status}`);
+            tocErrorCount++;
+          }
+
+          // Small delay to avoid overwhelming the server
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (tocError) {
+          console.error(`[SCRAPE-CATALOG] Error fetching TOC for ${book.egw_book_id}:`, tocError);
+          tocErrorCount++;
+        }
+
       } catch (error) {
         console.error(`[SCRAPE-CATALOG] Error processing book ${book.egw_book_id}:`, error);
         errorCount++;
@@ -166,6 +246,8 @@ serve(async (req) => {
       inserted: insertedCount,
       updated: updatedCount,
       errors: errorCount,
+      tocUpdated: tocUpdatedCount,
+      tocErrors: tocErrorCount,
       sourceUrl: fullUrl
     };
 
