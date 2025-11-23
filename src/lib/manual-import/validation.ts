@@ -41,10 +41,15 @@ export function validateCodeAssignments(
   let lastParsed: { chapter: number; paragraph: number } | null = null;
 
   assignments.forEach((assignment, index) => {
-    const { assignedCode, status } = assignment;
+    const { assignedCode, status, discarded } = assignment;
+
+    // Skip validation for discarded paragraphs
+    if (discarded || status === 'discarded') {
+      return;
+    }
 
     // Skip validation for pending assignments
-    if (status === 'pending') {
+    if (status === 'pending' || !assignedCode) {
       errors.push({
         type: 'missing_required',
         message: `El párrafo ${index + 1} necesita un código asignado`,

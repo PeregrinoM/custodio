@@ -88,7 +88,8 @@ export function Phase4Review({ state, onNext, onBack }: Phase4ReviewProps) {
   }
 
   const totalAssignments = state.codeAssignments.length;
-  const assignedCount = state.codeAssignments.filter(a => a.assignedCode && a.assignedCode !== 'FALTA').length;
+  const discardedCount = state.codeAssignments.filter(a => a.discarded).length;
+  const assignedCount = state.codeAssignments.filter(a => a.assignedCode && a.assignedCode !== 'FALTA' && !a.discarded).length;
   const missingCount = state.codeAssignments.filter(a => a.assignedCode === 'FALTA').length;
 
   // Group stats by chapter
@@ -97,6 +98,7 @@ export function Phase4Review({ state, onNext, onBack }: Phase4ReviewProps) {
     const auto = chapterAssignments.filter(a => a.status === 'auto').length;
     const manual = chapterAssignments.filter(a => a.status === 'manual').length;
     const falta = chapterAssignments.filter(a => a.assignedCode === 'FALTA').length;
+    const discarded = chapterAssignments.filter(a => a.discarded).length;
     
     return {
       chapter,
@@ -104,6 +106,7 @@ export function Phase4Review({ state, onNext, onBack }: Phase4ReviewProps) {
       auto,
       manual,
       falta,
+      discarded,
       autoPercentage: chapterAssignments.length > 0 ? Math.round((auto / chapterAssignments.length) * 100) : 0
     };
   });
@@ -119,10 +122,14 @@ export function Phase4Review({ state, onNext, onBack }: Phase4ReviewProps) {
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Global Summary Stats */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             <div className="border rounded-lg p-3 text-center">
               <div className="text-2xl font-bold">{totalAssignments}</div>
               <div className="text-xs text-muted-foreground">Párrafos totales</div>
+            </div>
+            <div className="border rounded-lg p-3 text-center bg-gray-50 dark:bg-gray-950">
+              <div className="text-2xl font-bold text-gray-600">{discardedCount}</div>
+              <div className="text-xs text-muted-foreground">Descartados</div>
             </div>
             <div className="border rounded-lg p-3 text-center bg-green-50 dark:bg-green-950">
               <div className="text-2xl font-bold text-green-600">{assignedCount}</div>
@@ -194,7 +201,10 @@ export function Phase4Review({ state, onNext, onBack }: Phase4ReviewProps) {
                         )}
                       </div>
                       <div className="text-sm text-muted-foreground space-y-1">
-                        <div>✅ {stat.total} párrafos asignados</div>
+                        <div>✅ {stat.total} párrafos totales</div>
+                        {stat.discarded > 0 && (
+                          <div>🗑️ {stat.discarded} descartados (no-contenido)</div>
+                        )}
                         <div>
                           📊 {stat.auto} automáticos ({stat.autoPercentage}%), {stat.manual} manuales
                         </div>
@@ -226,6 +236,8 @@ export function Phase4Review({ state, onNext, onBack }: Phase4ReviewProps) {
                 <li>• Tipo: <strong>{state.versionType === 'physical_baseline' ? 'Línea Base Física (LB F)' : 'Versión Regular'}</strong></li>
                 {state.editionDate && <li>• Fecha de edición: <strong>{state.editionDate}</strong></li>}
                 <li>• Capítulos procesados: <strong>{state.chapterStructure.length}</strong></li>
+                <li>• Párrafos totales detectados: <strong>{totalAssignments}</strong></li>
+                {discardedCount > 0 && <li>• Párrafos descartados (no-contenido): <strong>{discardedCount}</strong></li>}
                 <li>• Párrafos a importar: <strong>{assignedCount}</strong></li>
                 <li>• Párrafos marcados como FALTA: <strong>{missingCount}</strong></li>
                 {state.versionType === 'physical_baseline' && (
