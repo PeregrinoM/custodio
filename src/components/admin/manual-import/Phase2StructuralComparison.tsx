@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight, Loader2, BookOpen, Search } from 'lucide-react';
 import { ManualImportState } from '@/types/manual-import';
 
 interface Phase2StructuralComparisonProps {
@@ -43,8 +43,26 @@ export function Phase2StructuralComparison({ state, onNext, onBack }: Phase2Stru
       <Card>
         <CardHeader>
           <CardTitle>Fase 2: Comparación Estructural por Capítulo</CardTitle>
-          <CardDescription>
-            Verificación del número de párrafos entre el archivo cargado y la base de datos por cada capítulo
+          <CardDescription className="space-y-2">
+            <p>Verificación del número de párrafos entre el archivo cargado y la base de datos por cada capítulo</p>
+            <div className="flex items-center gap-2 pt-1">
+              <Badge variant="outline" className="text-xs">
+                {state.detectionMethod === 'toc' ? (
+                  <>
+                    <BookOpen className="h-3 w-3 mr-1" />
+                    Detectado por índice automático
+                  </>
+                ) : (
+                  <>
+                    <Search className="h-3 w-3 mr-1" />
+                    Detectado por patrones
+                  </>
+                )}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {state.chapterStructure.length} capítulos encontrados
+              </span>
+            </div>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -143,7 +161,7 @@ export function Phase2StructuralComparison({ state, onNext, onBack }: Phase2Stru
       <div className="flex justify-between">
         <Button onClick={onBack} variant="outline">
           <ChevronLeft className="mr-2 h-4 w-4" />
-          Volver
+          Volver a Fase 1
         </Button>
         <Button onClick={handleNext} size="lg">
           Continuar a Asignación de Códigos
