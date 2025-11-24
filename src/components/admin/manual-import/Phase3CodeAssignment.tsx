@@ -457,6 +457,10 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
             chapterNumber={state.currentChapter}
             onAssignCode={handleAssignCodeFromReference}
             selectedAssignmentIndex={selectedAssignmentIndex}
+            assignedCodes={assignments
+              .filter(a => a.assignedCode && !a.discarded)
+              .map(a => a.assignedCode)
+            }
           />
 
           {/* Progress Indicator */}
