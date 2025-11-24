@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   ChevronLeft, ChevronRight, Wand2, Loader2, CheckCircle2, 
   AlertCircle, Lock, Save, ArrowLeft, ArrowRight 
@@ -534,45 +535,53 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
           )}
 
           {/* Assignments List */}
-          <div className="space-y-3 max-h-[500px] overflow-y-auto border rounded-lg p-4">
-            {assignments.map((assignment, index) => (
-              <div 
-                key={assignment.index} 
-                onClick={() => !assignment.discarded && setSelectedAssignmentIndex(index)}
-                className={`border rounded-lg p-4 space-y-3 transition-all ${
-                  assignment.discarded 
-                    ? 'opacity-50 bg-muted/30 cursor-not-allowed' 
-                    : 'cursor-pointer hover:bg-accent/20'
-                } ${
-                  selectedAssignmentIndex === index && !assignment.discarded ? 'ring-2 ring-primary bg-accent/50' : ''
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="outline">#{index + 1}</Badge>
-                      {assignment.discarded && (
-                        <Badge variant="secondary" className="bg-gray-600">Descartado</Badge>
-                      )}
-                      {!assignment.discarded && assignment.status === 'auto' && (
-                        <Badge variant="default" className="bg-blue-600">Auto</Badge>
-                      )}
-                      {!assignment.discarded && assignment.status === 'manual' && (
-                        <Badge variant="default" className="bg-green-600">Manual</Badge>
-                      )}
-                      {!assignment.discarded && assignment.assignedCode === 'FALTA' && (
-                        <Badge variant="secondary">FALTA</Badge>
-                      )}
-                      {!assignment.discarded && assignment.confidence && (
-                        <Badge variant="outline">
-                          {Math.round(assignment.confidence * 100)}% similar
-                        </Badge>
-                      )}
+          <TooltipProvider delayDuration={1500}>
+            <div className="space-y-3 max-h-[500px] overflow-y-auto border rounded-lg p-4">
+              {assignments.map((assignment, index) => (
+                <div 
+                  key={assignment.index} 
+                  onClick={() => !assignment.discarded && setSelectedAssignmentIndex(index)}
+                  className={`border rounded-lg p-4 space-y-3 transition-all ${
+                    assignment.discarded 
+                      ? 'opacity-50 bg-muted/30 cursor-not-allowed' 
+                      : 'cursor-pointer hover:bg-accent/20'
+                  } ${
+                    selectedAssignmentIndex === index && !assignment.discarded ? 'ring-2 ring-primary bg-accent/50' : ''
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge variant="outline">#{index + 1}</Badge>
+                        {assignment.discarded && (
+                          <Badge variant="secondary" className="bg-gray-600">Descartado</Badge>
+                        )}
+                        {!assignment.discarded && assignment.status === 'auto' && (
+                          <Badge variant="default" className="bg-blue-600">Auto</Badge>
+                        )}
+                        {!assignment.discarded && assignment.status === 'manual' && (
+                          <Badge variant="default" className="bg-green-600">Manual</Badge>
+                        )}
+                        {!assignment.discarded && assignment.assignedCode === 'FALTA' && (
+                          <Badge variant="secondary">FALTA</Badge>
+                        )}
+                        {!assignment.discarded && assignment.confidence && (
+                          <Badge variant="outline">
+                            {Math.round(assignment.confidence * 100)}% similar
+                          </Badge>
+                        )}
+                      </div>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <p className="text-sm text-muted-foreground line-clamp-3">
+                            {assignment.text}
+                          </p>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-md max-h-64 overflow-y-auto">
+                          <p className="text-sm whitespace-pre-wrap">{assignment.text}</p>
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
-                    <p className="text-sm text-muted-foreground line-clamp-3">
-                      {assignment.text}
-                    </p>
-                  </div>
                   <div className="flex flex-col gap-2 w-48">
                     <Button
                       variant={assignment.discarded ? "default" : "outline"}
@@ -614,7 +623,8 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
                 )}
               </div>
             ))}
-          </div>
+            </div>
+          </TooltipProvider>
         </CardContent>
       </Card>
 
