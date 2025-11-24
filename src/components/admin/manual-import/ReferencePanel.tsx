@@ -26,9 +26,10 @@ interface ReferencePanelProps {
   chapterNumber: number;
   onAssignCode?: (code: string) => void;
   selectedAssignmentIndex?: number | null;
+  assignedCodes?: string[];
 }
 
-export function ReferencePanel({ bookId, chapterNumber, onAssignCode, selectedAssignmentIndex }: ReferencePanelProps) {
+export function ReferencePanel({ bookId, chapterNumber, onAssignCode, selectedAssignmentIndex, assignedCodes = [] }: ReferencePanelProps) {
   const [searchFilter, setSearchFilter] = useState('');
   const [selectedChapter, setSelectedChapter] = useState<string>('');
   const [selectedParagraph, setSelectedParagraph] = useState<DbParagraph | null>(null);
@@ -100,6 +101,11 @@ export function ReferencePanel({ bookId, chapterNumber, onAssignCode, selectedAs
   const selectedChapterData = chapters.find(ch => ch.id === selectedChapter);
 
   const handleParagraphClick = (paragraph: DbParagraph) => {
+    // Prevenir asignación si el código ya está asignado
+    if (assignedCodes.includes(paragraph.refcode_short)) {
+      return;
+    }
+    
     if (onAssignCode) {
       onAssignCode(paragraph.refcode_short);
     } else {
@@ -162,15 +168,23 @@ export function ReferencePanel({ bookId, chapterNumber, onAssignCode, selectedAs
         {/* Left: Paragraph preview */}
         <ScrollArea className="h-[400px] col-span-2">
           <div className="p-3 space-y-2">
-            {filteredParagraphs.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => handleParagraphClick(p)}
-                className="w-full text-left p-2 rounded-md hover:bg-accent transition-colors text-sm text-muted-foreground line-clamp-2"
-              >
-                {p.base_text.substring(0, 150)}...
-              </button>
-            ))}
+            {filteredParagraphs.map((p) => {
+              const isAssigned = assignedCodes.includes(p.refcode_short);
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => handleParagraphClick(p)}
+                  disabled={isAssigned}
+                  className={`w-full text-left p-2 rounded-md transition-colors text-sm text-muted-foreground line-clamp-2 ${
+                    isAssigned 
+                      ? 'opacity-50 cursor-not-allowed bg-muted/30' 
+                      : 'hover:bg-accent cursor-pointer'
+                  }`}
+                >
+                  {p.base_text.substring(0, 150)}...
+                </button>
+              );
+            })}
             {filteredParagraphs.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-8">
                 No se encontraron párrafos
@@ -186,16 +200,23 @@ export function ReferencePanel({ bookId, chapterNumber, onAssignCode, selectedAs
               Códigos a seleccionar que están relacionados al capítulo en revisión
             </p>
             <div className="flex flex-wrap gap-2">
-              {filteredParagraphs.map((p) => (
-                <Badge
-                  key={p.id}
-                  variant="outline"
-                  className="font-mono cursor-pointer hover:bg-accent transition-colors"
-                  onClick={() => handleParagraphClick(p)}
-                >
-                  {p.refcode_short}
-                </Badge>
-              ))}
+              {filteredParagraphs.map((p) => {
+                const isAssigned = assignedCodes.includes(p.refcode_short);
+                return (
+                  <Badge
+                    key={p.id}
+                    variant="outline"
+                    className={`font-mono transition-colors ${
+                      isAssigned 
+                        ? 'opacity-50 cursor-not-allowed bg-muted/30' 
+                        : 'cursor-pointer hover:bg-accent'
+                    }`}
+                    onClick={() => handleParagraphClick(p)}
+                  >
+                    {p.refcode_short}
+                  </Badge>
+                );
+              })}
             </div>
           </div>
         </ScrollArea>
