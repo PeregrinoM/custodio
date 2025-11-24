@@ -128,6 +128,11 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
       // Get chapter paragraphs (excluding discarded ones)
       const chapterParagraphs = assignments.filter(a => !a.discarded).map(a => a.text);
 
+      if (chapterParagraphs.length === 0) {
+        toast.error('No hay párrafos válidos para asignar (todos están descartados)');
+        return;
+      }
+
       // Call edge function with chapter filter
       const { data, error } = await supabase.functions.invoke('find-paragraph-matches', {
         body: {
@@ -138,7 +143,33 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        // Handle specific edge function errors
+        if (error.message?.includes('timeout') || error.message?.includes('timed out')) {
+          toast.error('La comparación excedió el tiempo límite. Intenta con menos párrafos o contacta soporte.');
+          return;
+        }
+        if (error.message?.includes('Book not found')) {
+          toast.error('El libro no existe en la base de datos. Verifica el código del libro.');
+          return;
+        }
+        if (error.message?.includes('No paragraphs found')) {
+          toast.error('No se encontraron párrafos en la base de datos para este capítulo.');
+          return;
+        }
+        throw error;
+      }
+
+      if (!data || !data.matches) {
+        toast.error('La función de comparación no devolvió resultados válidos');
+        return;
+      }
+
+      if (data.matches.length !== chapterParagraphs.length) {
+        console.warn(`Mismatch: esperados ${chapterParagraphs.length} resultados, recibidos ${data.matches.length}`);
+        toast.error('El número de resultados no coincide con los párrafos enviados');
+        return;
+      }
 
       // Update assignments with results (only for non-discarded)
       let resultIndex = 0;
@@ -175,10 +206,31 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
       );
       onNext({ codeAssignments: allAssignments });
 
-      toast.success(`Asignación automática completada para capítulo ${state.currentChapter}`);
+      const assignedCount = updatedAssignments.filter(a => a.status === 'auto').length;
+      toast.success(
+        `Asignación automática completada: ${assignedCount} párrafo${assignedCount !== 1 ? 's' : ''} asignado${assignedCount !== 1 ? 's' : ''} automáticamente`
+      );
     } catch (error) {
       console.error('Error in auto-assign:', error);
-      toast.error('Error al asignar códigos automáticamente');
+      
+      // Handle network errors
+      if (error instanceof TypeError && error.message?.includes('fetch')) {
+        toast.error('Error de conexión. Verifica tu conexión a internet e intenta nuevamente.');
+        return;
+      }
+
+      // Handle specific error types
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+      
+      if (errorMessage.includes('Invalid input') || errorMessage.includes('invalid')) {
+        toast.error('Datos de entrada inválidos. Verifica el formato de los párrafos.');
+      } else if (errorMessage.includes('permission') || errorMessage.includes('unauthorized')) {
+        toast.error('No tienes permisos para realizar esta operación. Verifica tu sesión.');
+      } else if (errorMessage.includes('rate limit')) {
+        toast.error('Has excedido el límite de solicitudes. Espera unos momentos e intenta nuevamente.');
+      } else {
+        toast.error(`Error al asignar códigos: ${errorMessage}`);
+      }
     } finally {
       setAutoAssigning(false);
       setProgress({ current: 0, total: 0 });
