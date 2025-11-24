@@ -37,6 +37,7 @@ export function ReferencePanel({ bookId, chapterNumber, onAssignCode, selectedAs
   const [chapters, setChapters] = useState<DbChapter[]>([]);
   const [paragraphs, setParagraphs] = useState<DbParagraph[]>([]);
   const [loading, setLoading] = useState(false);
+  const [hoveredParagraphId, setHoveredParagraphId] = useState<string | null>(null);
 
   // Load chapters from database
   useEffect(() => {
@@ -172,16 +173,21 @@ export function ReferencePanel({ bookId, chapterNumber, onAssignCode, selectedAs
             <div className="p-3 space-y-2">
               {filteredParagraphs.map((p) => {
                 const isAssigned = assignedCodes.includes(p.refcode_short);
+                const isHovered = hoveredParagraphId === p.id;
                 return (
                   <Tooltip key={p.id}>
                     <TooltipTrigger asChild>
                       <button
                         onClick={() => handleParagraphClick(p)}
                         disabled={isAssigned}
-                        className={`w-full text-left p-2 rounded-md transition-colors text-sm text-muted-foreground line-clamp-2 ${
+                        onMouseEnter={() => setHoveredParagraphId(p.id)}
+                        onMouseLeave={() => setHoveredParagraphId(null)}
+                        className={`w-full text-left p-2 rounded-md transition-colors text-sm line-clamp-2 ${
                           isAssigned 
-                            ? 'opacity-50 cursor-not-allowed bg-muted/30' 
-                            : 'hover:bg-accent cursor-pointer'
+                            ? 'opacity-50 cursor-not-allowed bg-muted/30 text-muted-foreground' 
+                            : isHovered
+                            ? 'bg-accent/80 cursor-pointer font-medium text-foreground'
+                            : 'hover:bg-accent cursor-pointer text-muted-foreground'
                         }`}
                       >
                         {p.base_text.substring(0, 150)}...
@@ -210,6 +216,7 @@ export function ReferencePanel({ bookId, chapterNumber, onAssignCode, selectedAs
               <div className="flex flex-wrap gap-2">
                 {filteredParagraphs.map((p) => {
                   const isAssigned = assignedCodes.includes(p.refcode_short);
+                  const isHovered = hoveredParagraphId === p.id;
                   return (
                     <Tooltip key={p.id}>
                       <TooltipTrigger asChild>
@@ -218,9 +225,13 @@ export function ReferencePanel({ bookId, chapterNumber, onAssignCode, selectedAs
                           className={`font-mono transition-colors ${
                             isAssigned 
                               ? 'opacity-50 cursor-not-allowed bg-muted/30' 
+                              : isHovered
+                              ? 'cursor-pointer bg-accent/80 font-bold'
                               : 'cursor-pointer hover:bg-accent'
                           }`}
                           onClick={() => handleParagraphClick(p)}
+                          onMouseEnter={() => setHoveredParagraphId(p.id)}
+                          onMouseLeave={() => setHoveredParagraphId(null)}
                         >
                           {p.refcode_short}
                         </Badge>
