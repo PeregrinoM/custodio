@@ -145,7 +145,7 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
       const updatedAssignments = assignments.map((assignment) => {
         if (assignment.discarded) return assignment;
         
-        const match = data.results[resultIndex++];
+        const match = data.matches[resultIndex++];
         if (!match) return assignment;
 
         if (match.bestMatch && match.bestMatch.similarity >= 0.5) {
