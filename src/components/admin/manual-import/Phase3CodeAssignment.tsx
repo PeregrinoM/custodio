@@ -25,6 +25,7 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [bookId, setBookId] = useState<string>('');
+  const [selectedAssignmentIndex, setSelectedAssignmentIndex] = useState<number | null>(null);
   const [dbParagraphs, setDbParagraphs] = useState<Array<{
     id: string;
     refcode_short: string;
@@ -294,6 +295,20 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
     toast.success('Progreso guardado');
   };
 
+  const handleAssignCodeFromReference = (code: string) => {
+    if (selectedAssignmentIndex === null) {
+      toast.error('Selecciona primero un párrafo para asignar');
+      return;
+    }
+
+    const assignment = assignments[selectedAssignmentIndex];
+    if (!assignment) return;
+
+    handleManualEdit(assignment.index, code);
+    toast.success(`Código ${code} asignado al párrafo #${selectedAssignmentIndex + 1}`);
+    setSelectedAssignmentIndex(null);
+  };
+
   const currentChapter = getCurrentChapter();
   const stats = {
     total: assignments.length,
@@ -440,6 +455,8 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
           <ReferencePanel 
             bookId={bookId}
             chapterNumber={state.currentChapter}
+            onAssignCode={handleAssignCodeFromReference}
+            selectedAssignmentIndex={selectedAssignmentIndex}
           />
 
           {/* Progress Indicator */}
@@ -459,8 +476,11 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
             {assignments.map((assignment, index) => (
               <div 
                 key={assignment.index} 
-                className={`border rounded-lg p-4 space-y-3 transition-opacity ${
+                onClick={() => setSelectedAssignmentIndex(index)}
+                className={`border rounded-lg p-4 space-y-3 transition-all cursor-pointer ${
                   assignment.discarded ? 'opacity-50 bg-muted/30' : ''
+                } ${
+                  selectedAssignmentIndex === index ? 'ring-2 ring-primary bg-accent/50' : 'hover:bg-accent/20'
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
