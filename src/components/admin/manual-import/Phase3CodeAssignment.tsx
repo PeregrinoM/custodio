@@ -24,6 +24,7 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
   const [assignments, setAssignments] = useState<CodeAssignment[]>([]);
   const [autoAssigning, setAutoAssigning] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [bookId, setBookId] = useState<string>('');
   const [dbParagraphs, setDbParagraphs] = useState<Array<{
     id: string;
     refcode_short: string;
@@ -32,9 +33,27 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
   }>>([]);
 
   useEffect(() => {
+    loadBookId();
+  }, [state.bookCode]);
+
+  useEffect(() => {
     initializeAssignments();
     loadChapterParagraphsFromDB();
   }, [state.currentChapter]);
+
+  const loadBookId = async () => {
+    if (!state.bookCode) return;
+    
+    const { data, error } = await supabase
+      .from('books')
+      .select('id')
+      .eq('code', state.bookCode)
+      .single();
+    
+    if (data && !error) {
+      setBookId(data.id);
+    }
+  };
 
   const initializeAssignments = () => {
     if (state.codeAssignments.length > 0) {
@@ -419,7 +438,7 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
 
           {/* Reference Panel */}
           <ReferencePanel 
-            paragraphs={dbParagraphs}
+            bookId={bookId}
             chapterNumber={state.currentChapter}
           />
 
