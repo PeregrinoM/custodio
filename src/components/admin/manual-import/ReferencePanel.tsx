@@ -98,13 +98,13 @@ export function ReferencePanel({ bookId, chapterNumber }: ReferencePanelProps) {
 
   return (
     <div className="border rounded-lg overflow-hidden">
-      <div className="grid grid-cols-2 border-b bg-muted/50">
+      <div className="grid grid-cols-3 border-b bg-muted/50">
         {/* Left column header */}
-        <div className="p-3 border-r">
-          <p className="text-sm font-medium">Contenido del párrafo de nuestra BD</p>
+        <div className="p-1 border-r col-span-2">
+          <p className="text-xs font-medium">Contenido del párrafo de nuestra BD</p>
         </div>
         {/* Right column header */}
-        <div className="p-3 space-y-2">
+        <div className="p-3 space-y-2 col-span-1">
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium">Capítulo:</p>
             <Select value={selectedChapter} onValueChange={setSelectedChapter}>
@@ -143,9 +143,9 @@ export function ReferencePanel({ bookId, chapterNumber }: ReferencePanelProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 divide-x h-[300px]">
+      <div className="grid grid-cols-3 divide-x h-[400px]">
         {/* Left: Paragraph preview */}
-        <ScrollArea className="h-[300px]">
+        <ScrollArea className="h-[400px] col-span-2">
           <div className="p-3 space-y-2">
             {filteredParagraphs.map((p) => (
               <button
@@ -165,7 +165,7 @@ export function ReferencePanel({ bookId, chapterNumber }: ReferencePanelProps) {
         </ScrollArea>
 
         {/* Right: Codes list */}
-        <ScrollArea className="h-[300px]">
+        <ScrollArea className="h-[400px] col-span-1">
           <div className="p-3">
             <p className="text-xs text-muted-foreground mb-2">
               Códigos a seleccionar que están relacionados al capítulo en revisión
