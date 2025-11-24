@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Search, Loader2 } from 'lucide-react';
 import { ParagraphDetailModal } from './ParagraphDetailModal';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,9 +24,11 @@ interface DbChapter {
 interface ReferencePanelProps {
   bookId: string;
   chapterNumber: number;
+  onAssignCode?: (code: string) => void;
+  selectedAssignmentIndex?: number | null;
 }
 
-export function ReferencePanel({ bookId, chapterNumber }: ReferencePanelProps) {
+export function ReferencePanel({ bookId, chapterNumber, onAssignCode, selectedAssignmentIndex }: ReferencePanelProps) {
   const [searchFilter, setSearchFilter] = useState('');
   const [selectedChapter, setSelectedChapter] = useState<string>('');
   const [selectedParagraph, setSelectedParagraph] = useState<DbParagraph | null>(null);
@@ -96,9 +99,26 @@ export function ReferencePanel({ bookId, chapterNumber }: ReferencePanelProps) {
 
   const selectedChapterData = chapters.find(ch => ch.id === selectedChapter);
 
+  const handleParagraphClick = (paragraph: DbParagraph) => {
+    if (onAssignCode) {
+      onAssignCode(paragraph.refcode_short);
+    } else {
+      setSelectedParagraph(paragraph);
+    }
+  };
+
+  const showSelectionIndicator = selectedAssignmentIndex !== null && onAssignCode;
+
   return (
     <div className="border rounded-lg overflow-hidden">
       <div className="border-b bg-muted/50 p-3">
+        {showSelectionIndicator && (
+          <Alert className="mb-3">
+            <AlertDescription className="text-sm">
+              📌 Párrafo #{selectedAssignmentIndex! + 1} seleccionado. Haz clic en un párrafo o código para asignar.
+            </AlertDescription>
+          </Alert>
+        )}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium whitespace-nowrap">Capítulo:</p>
@@ -145,7 +165,7 @@ export function ReferencePanel({ bookId, chapterNumber }: ReferencePanelProps) {
             {filteredParagraphs.map((p) => (
               <button
                 key={p.id}
-                onClick={() => setSelectedParagraph(p)}
+                onClick={() => handleParagraphClick(p)}
                 className="w-full text-left p-2 rounded-md hover:bg-accent transition-colors text-sm text-muted-foreground line-clamp-2"
               >
                 {p.base_text.substring(0, 150)}...
@@ -171,7 +191,7 @@ export function ReferencePanel({ bookId, chapterNumber }: ReferencePanelProps) {
                   key={p.id}
                   variant="outline"
                   className="font-mono cursor-pointer hover:bg-accent transition-colors"
-                  onClick={() => setSelectedParagraph(p)}
+                  onClick={() => handleParagraphClick(p)}
                 >
                   {p.refcode_short}
                 </Badge>
