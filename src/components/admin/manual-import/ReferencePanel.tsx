@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search } from 'lucide-react';
 import { ParagraphDetailModal } from './ParagraphDetailModal';
 
@@ -19,12 +20,38 @@ interface ReferencePanelProps {
 
 export function ReferencePanel({ paragraphs, chapterNumber }: ReferencePanelProps) {
   const [searchFilter, setSearchFilter] = useState('');
+  const [selectedChapter, setSelectedChapter] = useState<string>(chapterNumber.toString());
   const [selectedParagraph, setSelectedParagraph] = useState<DbParagraph | null>(null);
 
-  const filteredParagraphs = paragraphs.filter(p => 
-    p.refcode_short.toLowerCase().includes(searchFilter.toLowerCase()) ||
-    p.base_text.toLowerCase().includes(searchFilter.toLowerCase())
-  );
+  // Extract unique chapter numbers from refcodes
+  const availableChapters = useMemo(() => {
+    const chapters = new Set<number>();
+    paragraphs.forEach(p => {
+      // Extract chapter number from refcode like "CC 1.1" -> 1
+      const match = p.refcode_short.match(/\d+/);
+      if (match) {
+        chapters.add(parseInt(match[0]));
+      }
+    });
+    return Array.from(chapters).sort((a, b) => a - b);
+  }, [paragraphs]);
+
+  // Update selected chapter when chapterNumber prop changes
+  useMemo(() => {
+    setSelectedChapter(chapterNumber.toString());
+  }, [chapterNumber]);
+
+  const filteredParagraphs = paragraphs.filter(p => {
+    // Filter by chapter
+    const chapterMatch = p.refcode_short.startsWith(`${p.refcode_short.split(' ')[0]} ${selectedChapter}.`);
+    
+    // Filter by search text
+    const searchMatch = searchFilter === '' || 
+      p.refcode_short.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      p.base_text.toLowerCase().includes(searchFilter.toLowerCase());
+    
+    return chapterMatch && searchMatch;
+  });
 
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -35,12 +62,21 @@ export function ReferencePanel({ paragraphs, chapterNumber }: ReferencePanelProp
         </div>
         {/* Right column header */}
         <div className="p-3 space-y-2">
-          <p className="text-sm font-medium">
-            Capítulo {chapterNumber} 
-            <span className="text-xs text-muted-foreground ml-1">
-              (cambiable si fuese necesario pero por defecto debe cambiar según el capítulo en revisión)
-            </span>
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium">Capítulo:</p>
+            <Select value={selectedChapter} onValueChange={setSelectedChapter}>
+              <SelectTrigger className="h-9 w-24">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {availableChapters.map(ch => (
+                  <SelectItem key={ch} value={ch.toString()}>
+                    {ch}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
