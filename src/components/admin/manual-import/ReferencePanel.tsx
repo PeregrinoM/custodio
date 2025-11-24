@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Search, Loader2 } from 'lucide-react';
 import { ParagraphDetailModal } from './ParagraphDetailModal';
 import { supabase } from '@/integrations/supabase/client';
@@ -164,63 +165,77 @@ export function ReferencePanel({ bookId, chapterNumber, onAssignCode, selectedAs
         </div>
       </div>
 
-      <div className="grid grid-cols-3 divide-x h-[400px]">
-        {/* Left: Paragraph preview */}
-        <ScrollArea className="h-[400px] col-span-2">
-          <div className="p-3 space-y-2">
-            {filteredParagraphs.map((p) => {
-              const isAssigned = assignedCodes.includes(p.refcode_short);
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => handleParagraphClick(p)}
-                  disabled={isAssigned}
-                  className={`w-full text-left p-2 rounded-md transition-colors text-sm text-muted-foreground line-clamp-2 ${
-                    isAssigned 
-                      ? 'opacity-50 cursor-not-allowed bg-muted/30' 
-                      : 'hover:bg-accent cursor-pointer'
-                  }`}
-                >
-                  {p.base_text.substring(0, 150)}...
-                </button>
-              );
-            })}
-            {filteredParagraphs.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                No se encontraron párrafos
-              </p>
-            )}
-          </div>
-        </ScrollArea>
-
-        {/* Right: Codes list */}
-        <ScrollArea className="h-[400px] col-span-1">
-          <div className="p-3">
-            <p className="text-xs text-muted-foreground mb-2">
-              Códigos a seleccionar que están relacionados al capítulo en revisión
-            </p>
-            <div className="flex flex-wrap gap-2">
+      <TooltipProvider delayDuration={1500}>
+        <div className="grid grid-cols-3 divide-x h-[400px]">
+          {/* Left: Paragraph preview */}
+          <ScrollArea className="h-[400px] col-span-2">
+            <div className="p-3 space-y-2">
               {filteredParagraphs.map((p) => {
                 const isAssigned = assignedCodes.includes(p.refcode_short);
                 return (
-                  <Badge
-                    key={p.id}
-                    variant="outline"
-                    className={`font-mono transition-colors ${
-                      isAssigned 
-                        ? 'opacity-50 cursor-not-allowed bg-muted/30' 
-                        : 'cursor-pointer hover:bg-accent'
-                    }`}
-                    onClick={() => handleParagraphClick(p)}
-                  >
-                    {p.refcode_short}
-                  </Badge>
+                  <Tooltip key={p.id}>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => handleParagraphClick(p)}
+                        disabled={isAssigned}
+                        className={`w-full text-left p-2 rounded-md transition-colors text-sm text-muted-foreground line-clamp-2 ${
+                          isAssigned 
+                            ? 'opacity-50 cursor-not-allowed bg-muted/30' 
+                            : 'hover:bg-accent cursor-pointer'
+                        }`}
+                      >
+                        {p.base_text.substring(0, 150)}...
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left" className="max-w-md max-h-64 overflow-y-auto">
+                      <p className="text-sm whitespace-pre-wrap">{p.base_text}</p>
+                    </TooltipContent>
+                  </Tooltip>
                 );
               })}
+              {filteredParagraphs.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No se encontraron párrafos
+                </p>
+              )}
             </div>
-          </div>
-        </ScrollArea>
-      </div>
+          </ScrollArea>
+
+          {/* Right: Codes list */}
+          <ScrollArea className="h-[400px] col-span-1">
+            <div className="p-3">
+              <p className="text-xs text-muted-foreground mb-2">
+                Códigos a seleccionar que están relacionados al capítulo en revisión
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {filteredParagraphs.map((p) => {
+                  const isAssigned = assignedCodes.includes(p.refcode_short);
+                  return (
+                    <Tooltip key={p.id}>
+                      <TooltipTrigger asChild>
+                        <Badge
+                          variant="outline"
+                          className={`font-mono transition-colors ${
+                            isAssigned 
+                              ? 'opacity-50 cursor-not-allowed bg-muted/30' 
+                              : 'cursor-pointer hover:bg-accent'
+                          }`}
+                          onClick={() => handleParagraphClick(p)}
+                        >
+                          {p.refcode_short}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-md max-h-64 overflow-y-auto">
+                        <p className="text-sm whitespace-pre-wrap">{p.base_text}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                })}
+              </div>
+            </div>
+          </ScrollArea>
+        </div>
+      </TooltipProvider>
 
       {selectedParagraph && (
         <ParagraphDetailModal
