@@ -304,6 +304,12 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
     const assignment = assignments[selectedAssignmentIndex];
     if (!assignment) return;
 
+    // Prevenir asignación a párrafos descartados
+    if (assignment.discarded) {
+      toast.error('No se puede asignar código a un párrafo descartado');
+      return;
+    }
+
     handleManualEdit(assignment.index, code);
     toast.success(`Código ${code} asignado al párrafo #${selectedAssignmentIndex + 1}`);
     setSelectedAssignmentIndex(null);
@@ -480,11 +486,13 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
             {assignments.map((assignment, index) => (
               <div 
                 key={assignment.index} 
-                onClick={() => setSelectedAssignmentIndex(index)}
-                className={`border rounded-lg p-4 space-y-3 transition-all cursor-pointer ${
-                  assignment.discarded ? 'opacity-50 bg-muted/30' : ''
+                onClick={() => !assignment.discarded && setSelectedAssignmentIndex(index)}
+                className={`border rounded-lg p-4 space-y-3 transition-all ${
+                  assignment.discarded 
+                    ? 'opacity-50 bg-muted/30 cursor-not-allowed' 
+                    : 'cursor-pointer hover:bg-accent/20'
                 } ${
-                  selectedAssignmentIndex === index ? 'ring-2 ring-primary bg-accent/50' : 'hover:bg-accent/20'
+                  selectedAssignmentIndex === index && !assignment.discarded ? 'ring-2 ring-primary bg-accent/50' : ''
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
