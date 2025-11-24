@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search } from 'lucide-react';
+import { Search, Loader2 } from 'lucide-react';
 import { ParagraphDetailModal } from './ParagraphDetailModal';
+import { supabase } from '@/integrations/supabase/client';
 
 interface DbParagraph {
   id: string;
@@ -13,45 +14,87 @@ interface DbParagraph {
   base_text: string;
 }
 
+interface DbChapter {
+  id: string;
+  number: number;
+  title: string;
+}
+
 interface ReferencePanelProps {
-  paragraphs: DbParagraph[];
+  bookId: string;
   chapterNumber: number;
 }
 
-export function ReferencePanel({ paragraphs, chapterNumber }: ReferencePanelProps) {
+export function ReferencePanel({ bookId, chapterNumber }: ReferencePanelProps) {
   const [searchFilter, setSearchFilter] = useState('');
-  const [selectedChapter, setSelectedChapter] = useState<string>(chapterNumber.toString());
+  const [selectedChapter, setSelectedChapter] = useState<string>('');
   const [selectedParagraph, setSelectedParagraph] = useState<DbParagraph | null>(null);
+  const [chapters, setChapters] = useState<DbChapter[]>([]);
+  const [paragraphs, setParagraphs] = useState<DbParagraph[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // Extract unique chapter numbers from refcodes
-  const availableChapters = useMemo(() => {
-    const chapters = new Set<number>();
-    paragraphs.forEach(p => {
-      // Extract chapter number from refcode like "CC 1.1" -> 1
-      const match = p.refcode_short.match(/\d+/);
-      if (match) {
-        chapters.add(parseInt(match[0]));
-      }
-    });
-    return Array.from(chapters).sort((a, b) => a - b);
-  }, [paragraphs]);
+  // Load chapters from database
+  useEffect(() => {
+    loadChapters();
+  }, [bookId]);
+
+  // Load paragraphs when chapter changes
+  useEffect(() => {
+    if (selectedChapter) {
+      loadParagraphs(selectedChapter);
+    }
+  }, [selectedChapter]);
 
   // Update selected chapter when chapterNumber prop changes
-  useMemo(() => {
-    setSelectedChapter(chapterNumber.toString());
-  }, [chapterNumber]);
+  useEffect(() => {
+    const chapter = chapters.find(ch => ch.number === chapterNumber);
+    if (chapter) {
+      setSelectedChapter(chapter.id);
+    }
+  }, [chapterNumber, chapters]);
 
-  const filteredParagraphs = paragraphs.filter(p => {
-    // Filter by chapter
-    const chapterMatch = p.refcode_short.startsWith(`${p.refcode_short.split(' ')[0]} ${selectedChapter}.`);
-    
-    // Filter by search text
-    const searchMatch = searchFilter === '' || 
-      p.refcode_short.toLowerCase().includes(searchFilter.toLowerCase()) ||
-      p.base_text.toLowerCase().includes(searchFilter.toLowerCase());
-    
-    return chapterMatch && searchMatch;
-  });
+  const loadChapters = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('chapters')
+      .select('id, number, title')
+      .eq('book_id', bookId)
+      .order('number');
+
+    if (data && !error) {
+      setChapters(data);
+      // Set initial chapter
+      const currentChapter = data.find(ch => ch.number === chapterNumber);
+      if (currentChapter) {
+        setSelectedChapter(currentChapter.id);
+      }
+    }
+    setLoading(false);
+  };
+
+  const loadParagraphs = async (chapterId: string) => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('paragraphs')
+      .select('id, refcode_short, paragraph_number, base_text')
+      .eq('chapter_id', chapterId)
+      .order('paragraph_number');
+
+    if (data && !error) {
+      setParagraphs(data);
+    } else {
+      setParagraphs([]);
+    }
+    setLoading(false);
+  };
+
+  const filteredParagraphs = paragraphs.filter(p => 
+    searchFilter === '' || 
+    p.refcode_short.toLowerCase().includes(searchFilter.toLowerCase()) ||
+    p.base_text.toLowerCase().includes(searchFilter.toLowerCase())
+  );
+
+  const selectedChapterData = chapters.find(ch => ch.id === selectedChapter);
 
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -65,13 +108,24 @@ export function ReferencePanel({ paragraphs, chapterNumber }: ReferencePanelProp
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium">Capítulo:</p>
             <Select value={selectedChapter} onValueChange={setSelectedChapter}>
-              <SelectTrigger className="h-9 w-24">
-                <SelectValue />
+              <SelectTrigger className="h-9 w-[200px]">
+                <SelectValue>
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Cargando...
+                    </span>
+                  ) : selectedChapterData ? (
+                    `${selectedChapterData.number}. ${selectedChapterData.title}`
+                  ) : (
+                    'Seleccionar capítulo'
+                  )}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {availableChapters.map(ch => (
-                  <SelectItem key={ch} value={ch.toString()}>
-                    {ch}
+                {chapters.map(ch => (
+                  <SelectItem key={ch.id} value={ch.id}>
+                    {ch.number}. {ch.title}
                   </SelectItem>
                 ))}
               </SelectContent>
