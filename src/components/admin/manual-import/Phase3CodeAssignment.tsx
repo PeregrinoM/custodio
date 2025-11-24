@@ -608,15 +608,21 @@ export function Phase3CodeAssignment({ state, onNext, onBack }: Phase3CodeAssign
                     <div className="text-xs text-muted-foreground">Sugerencias:</div>
                     <div className="flex flex-wrap gap-1">
                       {assignment.suggestedCodes.slice(0, 5).map((suggestion, i) => (
-                        <Button
-                          key={i}
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleUseSuggestion(index, suggestion.code)}
-                          className="text-xs h-7"
-                        >
-                          {suggestion.code} ({Math.round(suggestion.similarity * 100)}%)
-                        </Button>
+                        <Tooltip key={i}>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleUseSuggestion(index, suggestion.code)}
+                              className="text-xs h-7"
+                            >
+                              {suggestion.code} ({Math.round(suggestion.similarity * 100)}%)
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="max-w-md max-h-64 overflow-y-auto">
+                            <p className="text-sm whitespace-pre-wrap">{suggestion.dbText}</p>
+                          </TooltipContent>
+                        </Tooltip>
                       ))}
                     </div>
                   </div>
