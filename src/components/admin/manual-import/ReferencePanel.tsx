@@ -98,41 +98,43 @@ export function ReferencePanel({ bookId, chapterNumber }: ReferencePanelProps) {
 
   return (
     <div className="border rounded-lg overflow-hidden">
-      <div className="border-b bg-muted/50 p-3 space-y-2">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-medium">Capítulo:</p>
-          <Select value={selectedChapter} onValueChange={setSelectedChapter}>
-            <SelectTrigger className="h-9 w-[200px]">
-              <SelectValue>
-                {loading ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Cargando...
-                  </span>
-                ) : selectedChapterData ? (
-                  `${selectedChapterData.number}. ${selectedChapterData.title}`
-                ) : (
-                  'Seleccionar capítulo'
-                )}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {chapters.map(ch => (
-                <SelectItem key={ch.id} value={ch.id}>
-                  {ch.number}. {ch.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="relative">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar códigos..."
-            value={searchFilter}
-            onChange={(e) => setSearchFilter(e.target.value)}
-            className="pl-8 h-9"
-          />
+      <div className="border-b bg-muted/50 p-3">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium whitespace-nowrap">Capítulo:</p>
+            <Select value={selectedChapter} onValueChange={setSelectedChapter}>
+              <SelectTrigger className="h-9 w-[200px]">
+                <SelectValue>
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Cargando...
+                    </span>
+                  ) : selectedChapterData ? (
+                    `${selectedChapterData.number}. ${selectedChapterData.title}`
+                  ) : (
+                    'Seleccionar capítulo'
+                  )}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {chapters.map(ch => (
+                  <SelectItem key={ch.id} value={ch.id}>
+                    {ch.number}. {ch.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="relative flex-1">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar códigos..."
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              className="pl-8 h-9"
+            />
+          </div>
         </div>
       </div>
 
