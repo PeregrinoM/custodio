@@ -71,3 +71,28 @@ export interface VersionSnapshot {
   paragraph_text: string;
   created_at: string;
 }
+
+export interface ChangeCategory {
+  id: string;
+  name: string;
+  display_name: string;
+  description: string | null;
+  icon: string | null;
+  color: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChangeClassification {
+  id: string;
+  paragraph_id: string;
+  category_id: string;
+  severity: 'bajo' | 'medio' | 'alto';
+  change_date: string | null;
+  notes: string | null;
+  classified_by: string | null;
+  created_at: string;
+  updated_at: string;
+}

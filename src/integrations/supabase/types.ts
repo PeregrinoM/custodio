@@ -103,6 +103,65 @@ export type Database = {
           },
         ]
       }
+      book_toc: {
+        Row: {
+          book_code: string
+          chapters_count: number | null
+          chapters_data: Json | null
+          created_at: string | null
+          egw_book_id: number
+          id: string
+          language: string
+          title: string
+          toc_extracted_at: string | null
+          toc_html: string | null
+          toc_url: string
+          updated_at: string | null
+          validation_error: string | null
+          validation_status: string | null
+        }
+        Insert: {
+          book_code: string
+          chapters_count?: number | null
+          chapters_data?: Json | null
+          created_at?: string | null
+          egw_book_id: number
+          id?: string
+          language?: string
+          title: string
+          toc_extracted_at?: string | null
+          toc_html?: string | null
+          toc_url: string
+          updated_at?: string | null
+          validation_error?: string | null
+          validation_status?: string | null
+        }
+        Update: {
+          book_code?: string
+          chapters_count?: number | null
+          chapters_data?: Json | null
+          created_at?: string | null
+          egw_book_id?: number
+          id?: string
+          language?: string
+          title?: string
+          toc_extracted_at?: string | null
+          toc_html?: string | null
+          toc_url?: string
+          updated_at?: string | null
+          validation_error?: string | null
+          validation_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_book_catalog"
+            columns: ["egw_book_id"]
+            isOneToOne: true
+            referencedRelation: "book_catalog"
+            referencedColumns: ["egw_book_id"]
+          },
+        ]
+      }
       book_versions: {
         Row: {
           book_id: string
@@ -224,6 +283,96 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: []
+      }
+      change_categories: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          description: string | null
+          display_name: string
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          display_name: string
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          display_name?: string
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      change_classifications: {
+        Row: {
+          category_id: string
+          change_date: string | null
+          classified_by: string | null
+          created_at: string | null
+          id: string
+          notes: string | null
+          paragraph_id: string
+          severity: string
+          updated_at: string | null
+        }
+        Insert: {
+          category_id: string
+          change_date?: string | null
+          classified_by?: string | null
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          paragraph_id: string
+          severity: string
+          updated_at?: string | null
+        }
+        Update: {
+          category_id?: string
+          change_date?: string | null
+          classified_by?: string | null
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          paragraph_id?: string
+          severity?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "change_classifications_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "change_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "change_classifications_paragraph_id_fkey"
+            columns: ["paragraph_id"]
+            isOneToOne: false
+            referencedRelation: "paragraphs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       chapters: {
         Row: {
